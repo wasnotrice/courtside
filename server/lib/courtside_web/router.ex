@@ -7,5 +7,8 @@ defmodule CourtsideWeb.Router do
 
   scope "/api", CourtsideWeb do
     pipe_through :api
+
+    post "/push", SyncController, :push
+    get "/pull", SyncController, :pull
   end
 end
