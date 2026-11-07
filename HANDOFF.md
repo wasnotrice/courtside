@@ -42,7 +42,7 @@ Stack: **SvelteKit** client (`web/`), **Phoenix/Elixir** API (`server/`), **Post
   makes" can't be merged, so a CRDT isn't appropriate.
 - **No auth in v1.** It's local dev, single team.
 
-## Sync protocol (implemented on the server; the client isn't built)
+## Sync protocol (see docs/sync-protocol.md for the full write-up)
 
 This is Replicache-style push/pull using the **global version strategy**:
 
@@ -94,78 +94,38 @@ yet, but this player's setup is different."
 
 ## Current state
 
-Branch: **`scaffold`**. `main` has no commits. Never commit on `main`.
+Steps 1 to 4 of the original plan are done, and step 5 is mostly done. See `README.md`
+for how to run it and `docs/sync-protocol.md` for the protocol.
 
-Done:
-- Phoenix 1.8 API-only app (`--no-html --no-assets --binary-id`), app `:courtside`.
-- `compose.yaml` runs Postgres 17 on **host port 5433**. 5432 was taken on the original
-  machine by another project's container. `config/dev.exs` and `config/test.exs` set
-  `port: 5433`. Adjust if the sandbox differs.
-- Migration `priv/repo/migrations/20261106000000_create_sync_tables.exs`.
-- `lib/courtside/practice.ex` (schemas), `lib/courtside/sync.ex` (push/pull),
-  `lib/courtside/sync/mutators.ex` (validation), `lib/courtside_web/controllers/sync_controller.ex`,
-  `lib/courtside_web/channels/sync_socket.ex` (socket and channel), routes in `router.ex`,
-  socket in `endpoint.ex`.
-- `mix compile --warnings-as-errors` passes, and the migration runs. **Nothing has been
-  exercised at runtime yet**: no requests have been sent and no tests have been written.
-- SvelteKit app generated with `sv create --template minimal --types ts`. It's untouched.
-- `docs/prototype.html` is the earlier single-file prototype, built as a hosted Claude
-  artifact. **Use it as the UI and UX reference**: the courtside flow, the custom number
-  pad (phone number keypads have no Return or Next key), labels per kind, personal-best
-  badges, and the team summary. Its sync layer is a simpler version of the same idea and
-  should not be reused as is.
+- **Server tests** (`server/test/courtside/sync_test.exs`, `sync_concurrency_test.exs`,
+  `courtside_web/controllers/sync_controller_test.exs`). They found and fixed these bugs:
+  `results` and `mutation_rejections` had integer ids (every write crashed); a blank
+  jersey crashed `player.put`; `result.set_setup` didn't revive a cleared result; a NUL
+  byte in args made the rejection unstorable, which wedged the client's queue.
+- **Client sync layer** (`web/src/lib/sync/`): mutators, replay, Dexie and memory stores,
+  HTTP and Phoenix poke transport, and the engine. The UI talks only to `engine.ts` (via
+  `index.svelte.ts`).
+- **UI** (`web/src/lib/ui/`): a port of the prototype, plus the Sync inspector tab.
+  Driven end to end with Playwright against the real server: two devices, pokes, the
+  offline switch, and a run deleted under another device's offline result.
+- **Edge cases**: all three are Vitest tests with two simulated clients against
+  `testing/fake-server.ts`, which follows the same protocol but uses the TypeScript rules.
 
-## Next steps, in order
+Decisions made along the way:
+- Rejections reach the client only through pull, not push responses. Once the cursor
+  passes a rejection it never comes back, so a dismissed one stays dismissed.
+- A failed push still pulls.
+- Pull's `SET TRANSACTION` is behind `config :courtside, :snapshot_pulls` (off in
+  test.exs, because the SQL sandbox already wraps each test in a transaction).
+- Runs have no creation time, so the Practice list sorts by drill name.
+- Clearing a value with a per-player setup sends `result.clear` and then
+  `result.set_setup`, because there's no "clear value only" mutation.
 
-1. **Server tests** (`server/test/courtside/sync_test.exs`, plus a controller test):
-   - Replaying the same push is a no-op (idempotency).
-   - A rejected mutation is recorded, returned, and still advances `last_mutation_id`.
-     Later mutations in the same batch still apply.
-   - A crashing mutation (e.g. a malformed UUID) is rejected and doesn't fail the push.
-   - Pull with `cursor=0` returns everything. Pull with the returned cursor returns nothing.
-   - `run.delete` tombstones the run and its results, and pull returns the tombstones.
-   - Makes > setup is rejected for `result.set_value`, `run.set_setup` and
-     `result.set_setup`.
-   - Two concurrent pushes get distinct versions in commit order. This is optional but
-     instructive: use two tasks with sandbox `shared` mode.
-2. **Client sync layer** (`web/src/lib/sync/`). The UI must only talk to this layer:
-   - `adapter-static` with `fallback: 'index.html'` and `ssr = false`, plus
-     `src/service-worker.ts` (the SvelteKit docs example) so the app shell loads offline.
-   - Vite dev proxy: `/api` to `http://localhost:4000`, `/socket` to the same with
-     `ws: true`. This avoids CORS.
-   - IndexedDB, Dexie was the plan, with these tables: the base tables mirroring the
-     server; `pending` (mutations with explicit ids, using a `next_mutation_id` counter
-     in `meta`, assigned in the same transaction); `meta` (`client_id`, `cursor`,
-     `next_mutation_id`); and `rejections`.
-   - `mutators.ts`: pure TypeScript `apply(state, mutation) → state` functions with the
-     same names and rules as the Elixir ones. Use them in two places: to validate before
-     enqueueing (refuse invalid input right away), and to compute the view.
-   - **View = base + pending mutations replayed.** Hold the base in memory and recompute
-     the view after every mutation or pull. A pending mutation that no longer applies
-     during that replay is skipped in the view; the server will reject it.
-   - Sync loop: on each mutation, push the whole pending batch, then pull. On pull,
-     apply the changes to the base (remove tombstoned rows), save the cursor, drop
-     pending entries with `id <= last_mutation_id`, store rejections, and recompute.
-     Retry with backoff, and also pull on the `online` event, on a poke (npm
-     `phoenix` client), and periodically while the page is visible. Serialize push
-     and pull.
-   - **A "simulate offline" switch** in the sync client, so experiments don't need
-     DevTools.
-   - Vitest tests for the mutators and the replay logic.
-3. **UI** (Svelte 5 runes; the user has `svelte5` and `sveltekit` skills, so use
-   them). Start functional: roster paste, add a drill or start a run, an entry list,
-   and a **sync inspector** panel showing client id, cursor, last mutation id, pending
-   mutations, rejections (each with a dismiss button), the offline switch, "Pull now"
-   and "Reset local data". Rejections must stay visible next to the affected player
-   until dismissed. Never drop them silently. Then port the prototype's number pad and
-   phone layout.
-4. **`README.md`** with how to run it, and **`docs/sync-protocol.md`**: a cleaned-up
-   version of the protocol section above, written for the coach.
-5. **Edge cases to test on purpose** (the experiment's real goal), ideally as tests that
-   run two simulated clients against one server:
-   - Two clients enter results for the same player while offline.
-   - Deleting a run on one client while another adds results to it.
-   - Changing a run's setup after makes have been entered.
+## Next steps
+
+1. Optional: run the two-client edge cases against the real Phoenix server, not only the
+   fake (for example, Vitest with `HttpTransport` against `MIX_ENV=test mix phx.server`).
+2. The known follow-ups below.
 
 Known follow-ups, not urgent:
 - Several tabs open on one device: share state through a `BroadcastChannel` or a lock.
@@ -173,17 +133,14 @@ Known follow-ups, not urgent:
 - Cleaning up old tombstones.
 - Auth.
 - Showing a "last edited by" when two coaches disagree on a value.
+- `Courtside.Practice` nests four schema modules in one file, which the Phoenix
+  `AGENTS.md` advises against.
 
 ## How to run
 
-```sh
-docker compose up -d                 # Postgres on :5433
-cd server && mix setup && mix phx.server   # API on :4000
-cd web && npm install && npm run dev       # app on :5173 (proxy not configured yet)
-```
-
-On the original machine, `erl --version` hangs because it starts an interactive shell.
-Use `elixir -v` instead.
+See `README.md`. In this sandbox, Postgres is the shared one on port **5432**, so use
+`PGPORT=5432`, and Elixir needs `MISE_ELIXIR_VERSION=1.20.2-otp-29 MISE_ERLANG_VERSION=29.0.2`
+(no mise version is set globally).
 
 ## Working agreements with this user
 
