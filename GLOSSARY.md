@@ -76,6 +76,14 @@ _Avoid_: Event, action, stat entry
 Credit to the player whose pass led to a made field goal. It's part of that made shot,
 not a play of its own.
 
+**Foul**:
+A play charged to a player, to the bench, or to the opponent, with a type: personal,
+offensive, technical or flagrant. An offensive foul also counts as a turnover.
+
+**Foul drawn**:
+Credit to our player who was fouled by the opponent. It's part of the opponent's foul,
+not a play of its own.
+
 **Game rules**:
 The rules a game is played under: periods and their length, when team fouls reset, the
 bonus and fouls to foul out. Each team has a default, and each game keeps its own copy.
