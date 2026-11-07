@@ -68,6 +68,21 @@ clients          id, organization_id, last_mutation_id
 - A push locks its organization's row in `org_versions`. Pull runs in a snapshot and
   filters by organization.
 
+### Ready for sign-in
+
+Sign-in isn't built, but three things are done now so that adding it later doesn't
+touch every mutator, the stores or the sync engine:
+
+- **Every server mutator takes a context** describing who is acting. For now it holds
+  only the organization. Later it holds the user, and checks such as "this user may
+  only change girls' basketball" live in one place.
+- **The phone's local database is named after the organization.** One phone can then
+  hold more than one organization, and signing out can delete exactly one.
+- **An authorization failure is a sync failure, never a rejection.** A phone that comes
+  back after a game with an expired session must keep its pending plays queued and
+  retry after sign-in. The engine already treats HTTP errors this way; a test pins it
+  down.
+
 ### Mutations
 
 | name | rules |
@@ -99,15 +114,19 @@ clients          id, organization_id, last_mutation_id
   - two phones edit different fields of the same player, and both changes survive;
   - a phone that was offline overwrites a newer edit to the same field, which is the
     documented limit;
-  - creating a season offline before the first practice of the year.
+  - creating a season offline before the first practice of the year;
+  - a push that fails with HTTP 401 leaves every pending change queued, with none
+    marked rejected, and the next successful sync sends them.
 - Existing practice tests keep passing after the restructure.
 
 ### Steps (one commit each)
 
 1. Rewrite the migration and the schemas, add organization scoping and the counter
-   per organization to push and pull, add the new mutators, and update the tests.
+   per organization to push and pull, pass a context to every mutator, add the new
+   mutators, and update the tests.
 2. Make every edit send only its changed fields, on client and server.
-3. Update the client sync layer: types, mutators, stores and the fake server.
+3. Update the client sync layer: types, mutators, stores (one local database per
+   organization) and the fake server, plus the 401 test.
 4. Update the UI: the program and season pickers, the roster for each team, and the
    filters.
 5. Update `docs/sync-protocol.md` (organizations, partial updates, the arrival-order
@@ -302,7 +321,9 @@ Rejection messages, matched on client and server:
 
 - **Split scorer roles**, such as one phone for shots and one for everything else.
   Plays support it; it needs a role per phone and a filtered live screen.
-- **Sign-in**, which would limit a coach to their own program, and deploying.
+- **Sign-in and roles** (coach, manager, maybe read-only for players or parents),
+  which would limit a coach to their own program, plus recording who made each change,
+  and deploying. Phase 1 prepares for it (see "Ready for sign-in").
 - **Other sports:** a sport module with its own stats, rules, box score and live screen.
 - **Sharing drills between programs**, head-to-head history and opponents as records.
 - Lineups, minutes, plus-minus, shot charts, individual opposing players, playing film
