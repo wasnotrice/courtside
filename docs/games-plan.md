@@ -95,8 +95,14 @@ touch every mutator, the stores or the sync engine:
 
 ### Client
 
-- New tables in the stores. Because the dev data is disposable, a schema version bump
-  can clear the phone's data.
+- New tables in the stores.
+- **A schema upgrade never discards pending changes.** It's fine to throw away the
+  phone's copy of the server's data and pull it again, because the server still has
+  it. The pending queue exists only on the phone: an upgrade carries it over (rewriting
+  old mutations into the new shape if needed), or syncs it before upgrading. Zero
+  lists this exact problem, writes stranded by a schema change, as a blocker for its
+  own offline support. A store test upgrades a database that has pending changes and
+  checks they survive.
 - A program picker in the header and a season picker. Both are remembered on the phone.
 - Roster tab: the roster for each team this season, with jersey numbers. Adding a
   player creates them and their roster entry in one step.
@@ -117,10 +123,32 @@ touch every mutator, the stores or the sync engine:
   - creating a season offline before the first practice of the year;
   - a push that fails with HTTP 401 leaves every pending change queued, with none
     marked rejected, and the next successful sync sends them.
+- Store: upgrading the schema with pending changes in the queue keeps every one.
+- Every new and changed mutator gets shared JSON cases, so both sides are checked.
 - Existing practice tests keep passing after the restructure.
+
+### Keeping client and server mutators in step
+
+Nothing checks today that the TypeScript and Elixir mutators agree. The worst drift is
+silent: if the phone sends a field under a name the server doesn't know, Ecto's `cast`
+drops it, the server accepts the change, and the next pull erases it from the phone.
+Two guards, built before the restructure, which rewrites every mutator:
+
+- **Shared test cases in JSON** (`spec/mutations/*.json`). Each case lists the starting
+  rows, one mutation, and either the rows afterward or the exact rejection message.
+  Vitest runs them through the TypeScript mutators; ExUnit runs them through the Elixir
+  mutators against the database. One file covers rules, argument names and messages
+  on both sides.
+- **The server rejects unknown argument keys** ("Unknown field: assist_id") instead of
+  dropping them, so a mismatched name fails loudly in development.
+
+Generating code from a shared schema was considered and skipped: it needs a schema
+format and a generator for each language, for about fifteen mutations.
 
 ### Steps (one commit each)
 
+0. Shared JSON mutation cases, run by both test suites against today's mutators, and
+   strict argument keys on the server.
 1. Rewrite the migration and the schemas, add organization scoping and the counter
    per organization to push and pull, pass a context to every mutator, add the new
    mutators, and update the tests.
