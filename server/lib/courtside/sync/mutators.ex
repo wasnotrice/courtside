@@ -31,6 +31,9 @@ defmodule Courtside.Sync.Mutators do
     (Repo.get(Player, args["id"]) || %Player{id: args["id"]})
     |> cast(args, [:name, :jersey, :active])
     |> update_change(:name, &String.trim/1)
+    # cast turns "" into nil, but the column is NOT NULL.
+    |> default_if_nil(:jersey, "")
+    |> default_if_nil(:active, true)
     |> validate_required([:name])
     |> validate_length(:name, max: 100)
     |> put_change(:version, v)
@@ -57,7 +60,9 @@ defmodule Courtside.Sync.Mutators do
   defp validate_kind_unchanged(cs, nil), do: cs
 
   defp validate_kind_unchanged(cs, %Drill{kind: kind}) do
-    if get_field(cs, :kind) == kind, do: cs, else: add_error(cs, :kind, "can't change after the drill is created")
+    if get_field(cs, :kind) == kind,
+      do: cs,
+      else: add_error(cs, :kind, "can't change after the drill is created")
   end
 
   # --- runs -----------------------------------------------------------------
@@ -76,7 +81,8 @@ defmodule Courtside.Sync.Mutators do
   end
 
   defp set_run_setup(args, v) do
-    with {:ok, run} <- fetch_live(DrillRun, args["id"], "That drill was removed from the practice."),
+    with {:ok, run} <-
+           fetch_live(DrillRun, args["id"], "That drill was removed from the practice."),
          drill = Repo.get!(Drill, run.drill_id),
          cs = run |> cast(args, [:setup]) |> validate_setup_for(drill.kind),
          :ok <- check_makes_fit(drill, run.id, get_field(cs, :setup)) do
@@ -89,15 +95,19 @@ defmodule Courtside.Sync.Mutators do
     over =
       from(r in Result,
         join: p in assoc(r, :player),
-        where: r.drill_run_id == ^run_id and not r.deleted and is_nil(r.setup) and r.value > ^setup,
+        where:
+          r.drill_run_id == ^run_id and not r.deleted and is_nil(r.setup) and r.value > ^setup,
         select: {p.name, r.value},
         limit: 1
       )
       |> Repo.one()
 
     case over do
-      nil -> :ok
-      {name, value} -> {:error, "#{name} has #{trunc(value)} makes, more than #{trunc(setup)} shots."}
+      nil ->
+        :ok
+
+      {name, value} ->
+        {:error, "#{name} has #{trunc(value)} makes, more than #{trunc(setup)} shots."}
     end
   end
 
@@ -123,7 +133,8 @@ defmodule Courtside.Sync.Mutators do
 
   defp set_result_value(args, v) do
     with {:ok, run, drill} <- fetch_run_and_drill(args),
-         {:ok, _player} <- fetch_live(Player, args["player_id"], "That player is no longer on the roster."),
+         {:ok, _player} <-
+           fetch_live(Player, args["player_id"], "That player is no longer on the roster."),
          result = get_result(run.id, args["player_id"]),
          {:ok, value} <- parse_value(drill.kind, args["value"], result.setup || run.setup) do
       result
@@ -135,11 +146,13 @@ defmodule Courtside.Sync.Mutators do
 
   defp set_result_setup(args, v) do
     with {:ok, run, drill} <- fetch_run_and_drill(args),
-         {:ok, _player} <- fetch_live(Player, args["player_id"], "That player is no longer on the roster."),
+         {:ok, _player} <-
+           fetch_live(Player, args["player_id"], "That player is no longer on the roster."),
          result = get_result(run.id, args["player_id"]),
          cs = result |> cast(args, [:setup]) |> validate_setup(:setup),
          :ok <- check_own_makes_fit(drill, result, get_field(cs, :setup) || run.setup) do
-      cs |> change(version: v) |> Repo.insert_or_update() |> to_result()
+      # deleted: false revives a cleared result, so the override reaches clients.
+      cs |> change(version: v, deleted: false) |> Repo.insert_or_update() |> to_result()
     end
   end
 
@@ -151,8 +164,14 @@ defmodule Courtside.Sync.Mutators do
 
   defp clear_result(args, v) do
     case Repo.get_by(Result, drill_run_id: args["drill_run_id"], player_id: args["player_id"]) do
-      nil -> :ok
-      result -> result |> change(value: nil, setup: nil, deleted: true, version: v) |> Repo.update() |> to_result()
+      nil ->
+        :ok
+
+      result ->
+        result
+        |> change(value: nil, setup: nil, deleted: true, version: v)
+        |> Repo.update()
+        |> to_result()
     end
   end
 
@@ -161,24 +180,35 @@ defmodule Courtside.Sync.Mutators do
       %Result{drill_run_id: run_id, player_id: player_id}
   end
 
-  defp parse_value(_kind, value, _setup) when not is_number(value), do: {:error, "Enter a number."}
-  defp parse_value(_kind, value, _setup) when value < 0, do: {:error, "Results can't be negative."}
+  defp parse_value(_kind, value, _setup) when not is_number(value),
+    do: {:error, "Enter a number."}
+
+  defp parse_value(_kind, value, _setup) when value < 0,
+    do: {:error, "Results can't be negative."}
 
   defp parse_value("makes", value, setup) do
     cond do
-      value != trunc(value) -> {:error, "Makes must be a whole number."}
-      is_number(setup) and value > setup -> {:error, "#{trunc(value)} makes is more than #{trunc(setup)} shots."}
-      true -> {:ok, value / 1}
+      value != trunc(value) ->
+        {:error, "Makes must be a whole number."}
+
+      is_number(setup) and value > setup ->
+        {:error, "#{trunc(value)} makes is more than #{trunc(setup)} shots."}
+
+      true ->
+        {:ok, value / 1}
     end
   end
 
-  defp parse_value("time", value, _setup) when value == 0, do: {:error, "Time must be above zero."}
+  defp parse_value("time", value, _setup) when value == 0,
+    do: {:error, "Time must be above zero."}
+
   defp parse_value(_kind, value, _setup), do: {:ok, value / 1}
 
   # --- shared ---------------------------------------------------------------
 
   defp fetch_run_and_drill(args) do
-    with {:ok, run} <- fetch_live(DrillRun, args["drill_run_id"], "That drill was removed from the practice.") do
+    with {:ok, run} <-
+           fetch_live(DrillRun, args["drill_run_id"], "That drill was removed from the practice.") do
       {:ok, run, Repo.get!(Drill, run.drill_id)}
     end
   end
@@ -192,8 +222,14 @@ defmodule Courtside.Sync.Mutators do
     end
   end
 
-  defp validate_setup_for(cs, "makes"), do: cs |> validate_required([:setup], message: "shots are required") |> validate_setup(:setup)
+  defp validate_setup_for(cs, "makes"),
+    do: cs |> validate_required([:setup], message: "shots are required") |> validate_setup(:setup)
+
   defp validate_setup_for(cs, _kind), do: validate_setup(cs, :setup)
+
+  defp default_if_nil(cs, field, default) do
+    if get_field(cs, field) == nil, do: put_change(cs, field, default), else: cs
+  end
 
   defp validate_setup(cs, field), do: validate_number(cs, field, greater_than: 0)
 
@@ -203,10 +239,13 @@ defmodule Courtside.Sync.Mutators do
   defp describe(cs) do
     cs
     |> traverse_errors(fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {k, val}, acc -> String.replace(acc, "%{#{k}}", to_string(val)) end)
+      Enum.reduce(opts, msg, fn {k, val}, acc ->
+        String.replace(acc, "%{#{k}}", to_string(val))
+      end)
     end)
     |> Enum.map_join("; ", fn {field, msgs} -> "#{humanize(field)} #{Enum.join(msgs, ", ")}" end)
   end
 
-  defp humanize(field), do: field |> to_string() |> String.replace("_", " ") |> String.capitalize()
+  defp humanize(field),
+    do: field |> to_string() |> String.replace("_", " ") |> String.capitalize()
 end

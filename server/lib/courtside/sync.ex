@@ -55,7 +55,10 @@ defmodule Courtside.Sync do
           set: [last_mutation_id: last, updated_at: DateTime.utc_now(:second)]
         )
 
-        %{last_mutation_id: last, rejections: rejections_for(client_id, Enum.map(mutations, & &1["id"]))}
+        %{
+          last_mutation_id: last,
+          rejections: rejections_for(client_id, Enum.map(mutations, & &1["id"]))
+        }
       end)
 
     with {:ok, _} <- result do
@@ -71,7 +74,8 @@ defmodule Courtside.Sync do
   """
   def pull(client_id, cursor) when is_binary(client_id) and is_integer(cursor) do
     Repo.transaction(fn ->
-      Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+      if snapshot_pulls?(),
+        do: Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
 
       version = Repo.one!(from m in "server_meta", where: m.id == 1, select: m.version)
 
@@ -100,6 +104,11 @@ defmodule Courtside.Sync do
     end)
   end
 
+  # The SQL sandbox wraps each test in a transaction, where SET TRANSACTION is
+  # no longer allowed, so test.exs turns this off. Tests that run outside the
+  # sandbox turn it back on.
+  defp snapshot_pulls?, do: Application.get_env(:courtside, :snapshot_pulls, true)
+
   defp bump_version do
     {1, [version]} =
       Repo.update_all(from(m in "server_meta", where: m.id == 1, select: m.version),
@@ -112,11 +121,18 @@ defmodule Courtside.Sync do
   defp lock_client(client_id) do
     now = DateTime.utc_now(:second)
 
-    Repo.insert_all("clients", [%{id: client_id, last_mutation_id: 0, inserted_at: now, updated_at: now}],
+    Repo.insert_all(
+      "clients",
+      [%{id: client_id, last_mutation_id: 0, inserted_at: now, updated_at: now}],
       on_conflict: :nothing
     )
 
-    Repo.one!(from c in "clients", where: c.id == ^client_id, lock: "FOR UPDATE", select: c.last_mutation_id)
+    Repo.one!(
+      from c in "clients",
+        where: c.id == ^client_id,
+        lock: "FOR UPDATE",
+        select: c.last_mutation_id
+    )
   end
 
   defp apply_mutation(client_id, %{"id" => id, "name" => name} = m, version) do
@@ -129,7 +145,10 @@ defmodule Courtside.Sync do
       rescue
         # A crashing mutation must not wedge the client's queue: reject it and move on.
         e ->
-          Logger.error("Mutation #{name} crashed: " <> Exception.format(:error, e, __STACKTRACE__))
+          Logger.error(
+            "Mutation #{name} crashed: " <> Exception.format(:error, e, __STACKTRACE__)
+          )
+
           {:error, "The server could not apply this change."}
       end
 
@@ -143,7 +162,12 @@ defmodule Courtside.Sync do
     end
   end
 
+  # The rejection must always be stored, or the push fails and the client's
+  # queue is stuck behind this mutation forever. Postgres refuses NUL bytes in
+  # text and jsonb, so scrub them from anything the client sent.
   defp record_rejection(client_id, mutation_id, name, args, reason, version) do
+    [name, args, reason] = scrub([name, args, reason])
+
     Repo.insert_all(
       "mutation_rejections",
       [
@@ -161,6 +185,11 @@ defmodule Courtside.Sync do
       on_conflict: :nothing
     )
   end
+
+  defp scrub(s) when is_binary(s), do: String.replace(s, <<0>>, "\uFFFD")
+  defp scrub(list) when is_list(list), do: Enum.map(list, &scrub/1)
+  defp scrub(map) when is_map(map), do: Map.new(map, fn {k, v} -> {scrub(k), scrub(v)} end)
+  defp scrub(other), do: other
 
   defp rejections_for(client_id, ids) do
     from(r in "mutation_rejections",
@@ -184,7 +213,9 @@ defmodule Courtside.Sync do
     do: Map.take(d, [:id, :name, :kind, :default_setup, :archived, :deleted, :version])
 
   defp to_wire(%DrillRun{} = r),
-    do: Map.take(r, [:id, :date, :drill_id, :setup, :deleted, :version]) |> Map.update!(:date, &Date.to_iso8601/1)
+    do:
+      Map.take(r, [:id, :date, :drill_id, :setup, :deleted, :version])
+      |> Map.update!(:date, &Date.to_iso8601/1)
 
   defp to_wire(%Result{} = r),
     do: Map.take(r, [:drill_run_id, :player_id, :value, :setup, :deleted, :version])

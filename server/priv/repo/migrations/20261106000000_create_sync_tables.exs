@@ -18,7 +18,8 @@ defmodule Courtside.Repo.Migrations.CreateSyncTables do
       timestamps(type: :utc_datetime)
     end
 
-    create table(:mutation_rejections) do
+    create table(:mutation_rejections, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :client_id, references(:clients, type: :string, on_delete: :delete_all), null: false
       add :mutation_id, :bigint, null: false
       add :name, :string, null: false
@@ -53,7 +54,10 @@ defmodule Courtside.Repo.Migrations.CreateSyncTables do
     end
 
     create constraint(:drills, :kind_valid, check: "kind IN ('makes', 'count', 'time')")
-    create constraint(:drills, :default_setup_positive, check: "default_setup IS NULL OR default_setup > 0")
+
+    create constraint(:drills, :default_setup_positive,
+             check: "default_setup IS NULL OR default_setup > 0"
+           )
 
     create table(:drill_runs, primary_key: false) do
       add :id, :binary_id, primary_key: true
@@ -67,7 +71,9 @@ defmodule Courtside.Repo.Migrations.CreateSyncTables do
 
     create constraint(:drill_runs, :setup_positive, check: "setup IS NULL OR setup > 0")
 
-    create table(:results) do
+    # The server-side id is internal; clients address a result by (run, player).
+    create table(:results, primary_key: false) do
+      add :id, :binary_id, primary_key: true
       add :drill_run_id, references(:drill_runs, type: :binary_id), null: false
       add :player_id, references(:players, type: :binary_id), null: false
       add :value, :float

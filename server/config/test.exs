@@ -9,7 +9,7 @@ config :courtside, Courtside.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  port: 5433,
+  port: String.to_integer(System.get_env("PGPORT", "5433")),
   database: "courtside_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
@@ -30,3 +30,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Pulls can't set their isolation level inside the SQL sandbox's transaction.
+config :courtside, snapshot_pulls: false
