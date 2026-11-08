@@ -8,8 +8,10 @@ Three phases, with two spikes between the first and second:
 3. Add games: live entry by a manager, corrections from film, and team-level opponent
    stats.
 4. Ship Courtside as a Tauri mobile app.
+5. Sign-in. It can come any time after phase 1, but it must ship before any server is
+   reachable from outside the tailnet.
 
-(The headings below call these phase 1, the spikes, phase 2 and phase 3.)
+(The headings below call these phase 1, the spikes, phase 2, phase 3 and phase 4.)
 
 The terms used here are defined in [`GLOSSARY.md`](../GLOSSARY.md). The decision to
 scope data by organization is
@@ -41,8 +43,13 @@ rewritten rather than migrated.
 - **"Most recent" means last to reach the server.** That's a known limit, documented
   with a test: a phone that was offline for hours overwrites newer edits to the same
   fields when it syncs.
-- **No sign-in yet.** Access stays on the local network or tailnet. The manager uses
-  the coach's phone or a team device.
+- **No sign-in until phase 4; the tailnet is the gate.** Until then, anything that
+  reaches the server can read and change everything. In dev, Vite listens on
+  `localhost` only and is reached through `tailscale serve`, so only devices signed into
+  the coach's tailnet get in. Never run it with `--host` on a shared network: Vite
+  proxies `/api` and `/socket` to Phoenix, so school or gym Wi-Fi would expose
+  students' names to anyone on it. The manager uses the coach's phone or a team device
+  on the tailnet.
 
 ---
 
@@ -87,6 +94,20 @@ touch every mutator, the stores or the sync engine:
   back after a game with an expired session must keep its pending plays queued and
   retry after sign-in. The engine already treats HTTP errors this way; a test pins it
   down.
+
+### Hardening sync
+
+Three holes that sign-in alone wouldn't close, fixed while push, pull and pokes are
+being rewritten:
+
+- **Poke topics per organization** (`sync:<org_id>` instead of one `"sync"` topic), so a
+  phone is only woken by changes in its own organization, and joining a topic can be
+  checked once sign-in exists.
+- **A client ID belongs to one organization.** A push or pull with a client ID
+  registered to another organization is refused. Otherwise anyone who learned a client
+  ID could read that phone's rejections or push as it.
+- **Limits on push size:** a cap on the request body and on mutations per push, so one
+  bad client can't hold the organization's lock.
 
 ### Mutations
 
@@ -145,7 +166,10 @@ touch every mutator, the stores or the sync engine:
 - Server:
   - each new rule, accepted and rejected;
   - an edit that sends one field leaves the others alone;
-  - two organizations' pushes don't affect each other's versions or pulls.
+  - two organizations' pushes don't affect each other's versions or pulls;
+  - a client ID registered to one organization is refused by another;
+  - a push over the size limits is refused before it takes the lock;
+  - a poke reaches only phones in the organization that changed.
 - Engine:
   - two phones edit different fields of the same player, and both changes survive;
   - a phone that was offline overwrites a newer edit to the same field, which is the
@@ -183,7 +207,9 @@ format and a generator for each language, for about fifteen mutations.
    strict argument keys on the server.
 1. Rewrite the migration and the schemas, add organization scoping and the counter
    per organization to push and pull, pass a context to every mutator, add the new
-   mutators and the server data ID, allow cross-origin requests, and update the tests.
+   mutators and the server data ID, allow cross-origin requests, harden sync (poke
+   topics per organization, client IDs tied to their organization, push limits), and
+   update the tests.
 2. Make every edit send only its changed fields, on client and server.
 3. Update the client sync layer: types, mutators, stores (one local database per
    organization) and the fake server, a configurable server address, persistent
@@ -191,7 +217,8 @@ format and a generator for each language, for about fifteen mutations.
 4. Update the UI: the program and season pickers, the roster for each team, and the
    filters.
 5. Update `docs/sync-protocol.md` (organizations, partial updates, the arrival-order
-   limit, the server data ID) and the README (home screen install, one dev address).
+   limit, the server data ID) and the README (home screen install, one dev address,
+   Vite on `localhost` behind `tailscale serve`).
 
 ---
 
@@ -452,6 +479,68 @@ static SvelteKit build. The steps depend on the spike's findings; the outline:
   IndexedDB inside a Tauri app may be durable enough.
 - **Signing and distribution** (Xcode, TestFlight) are on Eric's side; the sandbox can't
   sign builds.
+- **Without sign-in, the app reaches the server over the tailnet,** with the Tailscale
+  app on the phone. A server outside the tailnet waits for phase 4.
+
+---
+
+## Phase 4: sign-in
+
+Required before any public deploy; it can run any time after phase 1. Phase 1's
+context, local database per organization and 401 handling make it additive.
+
+### Accounts
+
+- **`mix phx.gen.auth`** (Phoenix 1.8) for users: magic-link sign-in, optional
+  passwords, sudo mode for sensitive actions, and a table tracking every token.
+  "Sign in with Google" can follow, since many schools use Google accounts.
+- **Membership and roles:** a user belongs to an organization, with a role per program:
+  - **coach:** everything in the program;
+  - **manager:** records and edits games;
+  - maybe **read-only** for players and parents.
+
+### Device tokens
+
+`phx.gen.auth` has no API tokens. Phoenix's API authentication guide adds a 365-day
+bearer token, stored only as a hash in the same table and checked by a plug. Courtside
+follows that guide, with two changes:
+
+- **Its own `"device"` context.** The guide's tokens expire when the user's email
+  changes, and changing the password deletes every token. A manager's phone shouldn't
+  be signed out mid-season by an unrelated account change.
+- **One token per device, with a name and a last-used time.** Signing in names the
+  device ("Team iPad"). The coach sees a list of devices and can revoke any of them,
+  for example when a phone is lost. A token unused for 365 days expires; using it keeps
+  it alive.
+
+**No refresh tokens.** The access-plus-refresh pair exists because self-contained tokens
+such as JWTs can't be revoked. These tokens are opaque and looked up in Postgres on
+every request. Every push and pull is a database transaction anyway, and deleting the
+row revokes the token at once. A refresh token would add failures an offline app has
+to avoid: it could expire while the phone is offline, two refreshes could race, and
+requests would fail while one is in progress.
+
+### Enforcement
+
+- **Server:** a plug on `/api` reads `Authorization: Bearer …` and turns the token into
+  the context: user, organization, and the programs the user can use. The socket's
+  `connect` checks the same token, and joining `sync:<org_id>` checks the organization.
+- **Pull** filters by the user's programs.
+- **Each mutator** checks the program of the rows it touches against the context,
+  which phase 1 makes a check in one place. A refused change is a rejection with a
+  reason ("You can't change boys' basketball"); a missing or revoked token is a 401.
+- **Client IDs belong to a device token**, so one device can't push as another.
+- **Recording who made each change:** a nullable column on synced rows. Changes from
+  before sign-in have no author.
+
+### Phone
+
+- The token is stored on the device: IndexedDB on the web, the system keychain in
+  Tauri.
+- A 401 shows a "sign in again" screen while the queue waits, then syncs. Phase 1 tests
+  this.
+- Signing out deletes that organization's local database, after warning about
+  unsynced changes.
 
 ---
 
@@ -459,9 +548,7 @@ static SvelteKit build. The steps depend on the spike's findings; the outline:
 
 - **Split scorer roles**, such as one phone for shots and one for everything else.
   Plays support it; it needs a role per phone and a filtered live screen.
-- **Sign-in and roles** (coach, manager, maybe read-only for players or parents),
-  which would limit a coach to their own program, plus recording who made each change,
-  and deploying. Phase 1 prepares for it (see "Ready for sign-in").
+- **Deploying** a server outside the tailnet, after phase 4. Deploys are Eric's.
 - **Other sports:** a sport module with its own stats, rules, box score and live screen.
 - **Sharing drills between programs**, head-to-head history and opponents as records.
 - Lineups, minutes, plus-minus, shot charts, individual opposing players, playing film
