@@ -1,10 +1,15 @@
 # Plan: organizations, seasons and game stats
 
-Two phases:
+Three phases, with two spikes between the first and second:
 1. Restructure the practice data so it's organized by organization, program, team and
-   season.
-2. Add games: live entry by a manager, corrections from film, and team-level opponent
+   season, and make offline data safer on the web.
+2. Spikes, each time-boxed and thrown away afterward: Tauri on iOS, and LiveStore for
+   games.
+3. Add games: live entry by a manager, corrections from film, and team-level opponent
    stats.
+4. Ship Courtside as a Tauri mobile app.
+
+(The headings below call these phase 1, the spikes, phase 2 and phase 3.)
 
 The terms used here are defined in [`GLOSSARY.md`](../GLOSSARY.md). The decision to
 scope data by organization is
@@ -110,6 +115,31 @@ touch every mutator, the stores or the sync engine:
   optional team filter.
 - History: filter by season and by team.
 
+### Offline safety and the server address
+
+- **A configurable server address.** Today the app calls `/api` and `/socket` on its
+  own address through Vite's proxy. The transport takes a base URL instead (the same
+  address by default), and Phoenix allows cross-origin requests from the app's
+  addresses. The Tauri app (phase 3) needs this, and it's cheaper now than retrofitted.
+- **Persistent storage on the web.** The app calls `navigator.storage.persist()`, and
+  the sync inspector shows whether it was granted. Without it, the browser can evict
+  the queue when the phone runs low on space.
+- **Install to the home screen.** The README tells the manager to add Courtside to the
+  home screen and only ever open it from there. On iOS that exempts it from Safari
+  deleting a site's storage after 7 days without a visit, makes persistent storage
+  likely to be granted, and avoids the home screen app and Safari holding separate
+  copies.
+- **One address in dev.** Storage belongs to the app's address, so plays recorded at
+  `localhost`, the LAN address and the tailnet name live in three separate places. The
+  README says to pick the tailnet name and stick with it. A guard that redirects other
+  addresses was considered and dropped, since the Tauri app removes the problem.
+- **A server data ID.** Pull returns an ID for the server's data, created with the
+  database and changed whenever it's reset or restored. When a phone sees a new ID, it
+  throws away its copy of the server's data and pulls from scratch, keeping its pending
+  queue. Without it, a phone keeps rows a reset server no longer has. In production,
+  point-in-time recovery is the real protection, so a restore never loses confirmed
+  changes the phones have already dropped.
+
 ### Tests
 
 - Server:
@@ -121,6 +151,8 @@ touch every mutator, the stores or the sync engine:
   - a phone that was offline overwrites a newer edit to the same field, which is the
     documented limit;
   - creating a season offline before the first practice of the year;
+  - a new server data ID makes the phone pull from scratch, drop rows the server no
+    longer has and keep its pending changes;
   - a push that fails with HTTP 401 leaves every pending change queued, with none
     marked rejected, and the next successful sync sends them.
 - Store: upgrading the schema with pending changes in the queue keeps every one.
@@ -151,14 +183,57 @@ format and a generator for each language, for about fifteen mutations.
    strict argument keys on the server.
 1. Rewrite the migration and the schemas, add organization scoping and the counter
    per organization to push and pull, pass a context to every mutator, add the new
-   mutators, and update the tests.
+   mutators and the server data ID, allow cross-origin requests, and update the tests.
 2. Make every edit send only its changed fields, on client and server.
 3. Update the client sync layer: types, mutators, stores (one local database per
-   organization) and the fake server, plus the 401 test.
+   organization) and the fake server, a configurable server address, persistent
+   storage, the server data ID, plus the 401 test.
 4. Update the UI: the program and season pickers, the roster for each team, and the
    filters.
 5. Update `docs/sync-protocol.md` (organizations, partial updates, the arrival-order
-   limit) and the README.
+   limit, the server data ID) and the README (home screen install, one dev address).
+
+---
+
+## Spikes, between phases 1 and 2
+
+Both run after phase 1, when the structure has settled, and before game-day features
+depend on their answers. Each is time-boxed, lives on its own branch and is thrown away;
+what's kept is a short write-up in `docs/research/`. They're independent and can run in
+either order.
+
+### Tauri on iOS (about a day)
+
+Get today's app running in the iOS simulator inside Tauri 2, and check:
+- IndexedDB works inside the app and survives restarts;
+- `crypto.randomUUID` exists in Tauri's web view;
+- push, pull and WebSocket pokes reach Phoenix from the app's own address (CORS);
+- keeping the screen awake works, through the web API or a plugin.
+
+The sandbox can build for the simulator but can't sign builds, so a run on a real phone
+is on Eric's side. If a check fails, phase 3 changes before phase 2 builds on it.
+
+### LiveStore for games (two to three days)
+
+The question: is an event-sourced library with no server authority a better fit for
+plays than Courtside's own sync? Plays are already events that are only added to, so
+games are the fairest test. The spike builds a stripped-down live screen (player, stat,
+undo) on LiveStore, behind the same engine surface the UI uses (`snapshot`, `subscribe`,
+`mutate`), and answers:
+- **Offline:** a full game recorded offline on two devices, then synced. Does
+  everything arrive, and in a sensible order?
+- **Rules without a server veto:** how "only made shots can have an assist" holds when
+  every device applies events itself, including a device running older code.
+- **Schema changes:** what it takes to change a play's shape once events are stored.
+- **Size:** how big a season's event log gets on a phone, and what compaction does.
+- **Phoenix:** whether Phoenix can be a custom sync backend (ordered events from a
+  cursor, plus notifications), or whether it needs Cloudflare or Node.
+- **Svelte:** how well the Svelte integration works with Svelte 5.
+- **Sign-in:** LiveStore's auth docs were unfinished on 2026-11-07; check again.
+
+**Deciding:** if LiveStore is clearly better for plays, phase 2's sync work (steps 1–3)
+is replanned around it before it starts. Otherwise phase 2 goes ahead as written, and
+the write-up records why.
 
 ---
 
@@ -276,6 +351,9 @@ Rejection messages, matched on client and server:
 - **Undo** deletes the last play this phone added, synced or not, and says what it
   removed.
 - **No lineups or running clock.** The screen stays awake, as drill entry does.
+- **Unsynced warning at the end of a game.** Marking a game final, or leaving the live
+  screen, with plays still unsynced shows how many and asks the scorer to get signal
+  before closing the app or handing the phone back.
 
 ### Review screen and box score
 
@@ -296,6 +374,18 @@ Rejection messages, matched on client and server:
   - fouls, fouls drawn.
 - Tapping a box score cell lists the plays behind it, ready to edit or delete. A play
   can be added from there.
+
+### Restoring from a refusal
+
+When another phone deletes a game or a drill run, every change recorded into it
+offline is refused, and dismissing those refusals would lose them for good. Deletes
+are tombstones, so the refusal can offer a way back:
+- "That game was deleted" offers **Restore the game**, which brings the game back (a
+  `game.put` revives a tombstone, as `result.set_setup` already does for results) and
+  queues the refused plays again as new changes.
+- "That drill was removed from the practice" offers **Restore the drill run** the same
+  way, with its results.
+- Dismissing still works; the screen says the changes will be lost.
 
 ### Season totals and comparing practice to games
 
@@ -341,7 +431,27 @@ Rejection messages, matched on client and server:
 6. UI: the live screen.
 7. UI: the review screen, box score, official score and mismatch flag.
 8. UI: season totals and comparing practice to games.
-9. Docs, then the end-to-end run.
+9. Restoring a deleted game or drill run from a refusal, with engine tests.
+10. Docs, then the end-to-end run.
+
+---
+
+## Phase 3: Tauri mobile app
+
+Courtside ships as a Tauri 2 app for iOS (and Android if wanted), wrapping the same
+static SvelteKit build. The steps depend on the spike's findings; the outline:
+
+- **Why:** a Tauri app serves its files from a fixed internal address, so its storage
+  doesn't depend on any hostname, and it isn't subject to Safari's 7-day deletion.
+- **The server address** comes from settings, using phase 1's configurable transport.
+- **The service worker is web-only.** Tauri bundles the app's files, so it starts
+  offline without a cached app shell. The web version keeps its service worker.
+- **Optional: a SQLite store** behind `LocalStore`, using Tauri's SQL plugin, so the
+  queue lives in the app's own files rather than the web view's storage. It must pass
+  the same store contract tests as Dexie and the memory store. Decide after the spike:
+  IndexedDB inside a Tauri app may be durable enough.
+- **Signing and distribution** (Xcode, TestFlight) are on Eric's side; the sandbox can't
+  sign builds.
 
 ---
 
