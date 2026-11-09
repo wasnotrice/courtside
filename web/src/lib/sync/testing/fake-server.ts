@@ -33,7 +33,6 @@ export class FakeServer {
 	constructor({ empty = false }: { empty?: boolean } = {}) {
 		if (!empty) {
 			this.push({
-				organization_id: 'fake',
 				client_id: 'setup',
 				mutations: structure().map((m, i) => ({ ...m, id: i + 1 }) as PendingMutation)
 			});
@@ -78,6 +77,21 @@ export class FakeServer {
 				TABLES.map((t) => [t, since(this.tables[t] as Map<string, Row>)])
 			) as unknown as PullResponse['changes']
 		});
+	}
+
+	/** A copy of everything, to restore() later, like a database backup. */
+	backup() {
+		return structuredClone({ version: this.version, tables: this.tables, clients: this.clients, rejections: this.rejections });
+	}
+
+	/** Puts a backup back, with a new data id, as restoring a database would. */
+	restore(backup: ReturnType<FakeServer['backup']>) {
+		const b = structuredClone(backup);
+		this.version = b.version;
+		this.tables = b.tables;
+		this.clients = b.clients;
+		this.rejections = b.rejections;
+		this.dataId = crypto.randomUUID();
 	}
 
 	/** The live rows, as a client would hold them after a full pull. */

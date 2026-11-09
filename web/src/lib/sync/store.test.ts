@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { TABLES } from './replay';
+import Dexie from 'dexie';
 import { describe, expect, it } from 'vitest';
 import { DexieStore } from './dexie-store';
 import { MemoryStore, type LocalStore } from './store';
@@ -80,6 +81,32 @@ describe.each(stores)('%s', (_name, make) => {
 		expect((await store.load()).rejections.map((r) => r.mutation_id)).toEqual([2]);
 	});
 
+	it('remembers the data id of the last pull', async () => {
+		const store = make();
+		expect((await store.load()).dataId).toBeNull();
+		await store.applyPull(pull({ data_id: 'data-7' }));
+		expect((await store.load()).dataId).toBe('data-7');
+	});
+
+	it('restartBase drops the base and cursor but keeps the client id, queue and rejections', async () => {
+		const store = make();
+		const { clientId } = await store.load();
+		await store.enqueue(player());
+		await store.enqueue(player());
+		await store.applyPull(
+			pull({ cursor: 7, rejections: [rejection(1)] }, { players: [{ ...ana, deleted: false, version: 7 }] })
+		);
+
+		await store.restartBase();
+
+		const snap = await store.load();
+		expect(snap).toMatchObject({ clientId, cursor: 0, dataId: null });
+		expect(snap.base.players.size).toBe(0);
+		expect(snap.pending.map((m) => m.id)).toEqual([1, 2]);
+		expect(snap.rejections).toEqual([rejection(1)]);
+		expect((await store.enqueue(player())).id).toBe(3);
+	});
+
 	it('reset starts over as a new client', async () => {
 		const store = make();
 		const { clientId } = await store.load();
@@ -90,5 +117,40 @@ describe.each(stores)('%s', (_name, make) => {
 		expect(snap.clientId).not.toBe(clientId);
 		expect(snap.pending).toEqual([]);
 		expect((await store.enqueue(player())).id).toBe(1);
+	});
+});
+
+describe('DexieStore schema upgrades', () => {
+	it('keeps pending changes when upgrading from version 1, and drops the old base', async () => {
+		// A database as version 1 of the app left it.
+		const old = new Dexie('courtside-upgrade-test');
+		old.version(1).stores({
+			players: 'id',
+			drills: 'id',
+			runs: 'id',
+			results: 'key, drill_run_id',
+			pending: 'id',
+			rejections: 'mutation_id',
+			meta: 'key'
+		});
+		await old.table('players').put({ id: 'p1', name: 'Ana', jersey: '4', active: true });
+		await old.table('pending').bulkPut([
+			{ id: 1, name: 'player.put', args: { id: 'p1', name: 'Ana B' } },
+			{ id: 2, name: 'player.put', args: { id: 'p2', name: 'Bea' } }
+		]);
+		await old.table('meta').bulkPut([
+			{ key: 'client_id', value: 'old-client' },
+			{ key: 'cursor', value: 41 },
+			{ key: 'next_mutation_id', value: 3 }
+		]);
+		old.close();
+
+		const store = new DexieStore('upgrade-test');
+		const snap = await store.load();
+
+		expect(snap.pending.map((m) => m.id)).toEqual([1, 2]);
+		expect(snap).toMatchObject({ clientId: 'old-client', cursor: 0, dataId: null });
+		expect(snap.base.players.size).toBe(0);
+		expect((await store.enqueue(player())).id).toBe(3);
 	});
 });

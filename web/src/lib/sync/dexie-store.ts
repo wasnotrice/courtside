@@ -1,30 +1,44 @@
 // LocalStore on IndexedDB via Dexie. Tables mirror the server's synced tables,
 // plus the queue (`pending`), sync bookkeeping (`meta`) and `rejections`.
+//
+// One database per organization (`courtside-<organization id>`), so a device
+// can hold more than one, and signing out can delete exactly one.
+//
+// Schema upgrades may throw away the base (the server still has it; the next
+// pull brings it back) but must never throw away `pending`, which exists only
+// on this device.
 
-import Dexie, { type EntityTable } from 'dexie';
+import Dexie, { type EntityTable, type Transaction } from 'dexie';
+import { keyOf, TABLES } from './replay';
 import { addUnique, newClientId, type LocalStore, type Snapshot } from './store';
 import {
-	resultKey,
-	type Drill,
+	emptyState,
 	type MutationInput,
 	type PendingMutation,
-	type Player,
 	type PullResponse,
 	type Rejection,
-	type Result,
-	type Run
+	type State
 } from './types';
 
 interface Meta {
-	key: 'client_id' | 'cursor' | 'last_mutation_id' | 'next_mutation_id';
+	key: 'client_id' | 'cursor' | 'data_id' | 'last_mutation_id' | 'next_mutation_id';
 	value: string | number;
 }
 
+type BaseTable = keyof State;
+
+/** Base tables, keyed by `key` (keyOf: the id, or run/player for results). */
+type Keyed = Record<string, unknown> & { key: string };
+
+/** Clears the base and the cursor for a fresh pull, keeping the queue. */
+async function dropBase(tx: Transaction) {
+	for (const t of tx.storeNames) {
+		if (!['pending', 'rejections', 'meta'].includes(t)) await tx.table(t).clear();
+	}
+	await tx.table('meta').bulkDelete(['cursor', 'data_id']);
+}
+
 class CourtsideDB extends Dexie {
-	players!: EntityTable<Player, 'id'>;
-	drills!: EntityTable<Drill, 'id'>;
-	runs!: EntityTable<Run, 'id'>;
-	results!: EntityTable<Result & { key: string }, 'key'>;
 	pending!: EntityTable<PendingMutation, 'id'>;
 	rejections!: EntityTable<Rejection, 'mutation_id'>;
 	meta!: EntityTable<Meta, 'key'>;
@@ -40,14 +54,32 @@ class CourtsideDB extends Dexie {
 			rejections: 'mutation_id',
 			meta: 'key'
 		});
+		// Organizations, programs, seasons, teams and roster entries. Every base
+		// table is keyed by `key`, so the old base is dropped and pulled again.
+		this.version(2)
+			.stores({
+				players: null,
+				drills: null,
+				runs: null,
+				results: null,
+				...Object.fromEntries(TABLES.map((t) => [`base_${t}`, 'key'])),
+				pending: 'id',
+				rejections: 'mutation_id',
+				meta: 'key'
+			})
+			.upgrade(dropBase);
+	}
+
+	base(table: BaseTable): EntityTable<Keyed, 'key'> {
+		return this.table(`base_${table}`);
 	}
 }
 
 export class DexieStore implements LocalStore {
 	private db: CourtsideDB;
 
-	constructor(name = 'courtside') {
-		this.db = new CourtsideDB(name);
+	constructor(organizationId: string) {
+		this.db = new CourtsideDB(`courtside-${organizationId}`);
 	}
 
 	async load(): Promise<Snapshot> {
@@ -59,27 +91,19 @@ export class DexieStore implements LocalStore {
 				await db.meta.put({ key: 'client_id', value: clientId });
 			}
 
-			const [players, drills, runs, results, pending, rejections] = await Promise.all([
-				db.players.toArray(),
-				db.drills.toArray(),
-				db.runs.toArray(),
-				db.results.toArray(),
-				db.pending.orderBy('id').toArray(),
-				db.rejections.orderBy('mutation_id').toArray()
-			]);
+			const base = emptyState() as unknown as Record<BaseTable, Map<string, unknown>>;
+			for (const t of TABLES) {
+				for (const { key, ...row } of await db.base(t).toArray()) base[t].set(key, row);
+			}
 
 			return {
 				clientId,
 				cursor: (await this.meta<number>('cursor')) ?? 0,
+				dataId: (await this.meta<string>('data_id')) ?? null,
 				lastMutationId: (await this.meta<number>('last_mutation_id')) ?? 0,
-				base: {
-					players: new Map(players.map((p) => [p.id, p])),
-					drills: new Map(drills.map((d) => [d.id, d])),
-					runs: new Map(runs.map((r) => [r.id, r])),
-					results: new Map(results.map(({ key, ...r }) => [key, r]))
-				},
-				pending,
-				rejections
+				base: base as unknown as State,
+				pending: await db.pending.orderBy('id').toArray(),
+				rejections: await db.rejections.orderBy('mutation_id').toArray()
 			};
 		});
 	}
@@ -97,24 +121,29 @@ export class DexieStore implements LocalStore {
 
 	async applyPull(pull: PullResponse): Promise<void> {
 		const db = this.db;
-		const { players, drills, runs, results } = pull.changes;
 
 		await db.transaction('rw', db.tables, async () => {
-			for (const { deleted, version: _v, ...p } of players) await (deleted ? db.players.delete(p.id) : db.players.put(p));
-			for (const { deleted, version: _v, ...d } of drills) await (deleted ? db.drills.delete(d.id) : db.drills.put(d));
-			for (const { deleted, version: _v, ...r } of runs) await (deleted ? db.runs.delete(r.id) : db.runs.put(r));
-			for (const { deleted, version: _v, ...r } of results) {
-				const key = resultKey(r.drill_run_id, r.player_id);
-				await (deleted ? db.results.delete(key) : db.results.put({ ...r, key }));
+			for (const t of TABLES) {
+				const rows = pull.changes[t] as unknown as ({ deleted: boolean; version: number } & Record<string, unknown>)[];
+				for (const { deleted, version: _v, ...row } of rows ?? []) {
+					const key = keyOf(t, row);
+					await (deleted ? db.base(t).delete(key) : db.base(t).put({ ...row, key }));
+				}
 			}
 
 			await db.meta.bulkPut([
 				{ key: 'cursor', value: pull.cursor },
+				{ key: 'data_id', value: pull.data_id },
 				{ key: 'last_mutation_id', value: pull.last_mutation_id }
 			]);
 			await db.pending.where('id').belowOrEqual(pull.last_mutation_id).delete();
 			await this.putRejections(pull.rejections);
 		});
+	}
+
+	async restartBase(): Promise<void> {
+		const db = this.db;
+		await db.transaction('rw', db.tables, () => dropBase(Dexie.currentTransaction!));
 	}
 
 	async dismissRejection(mutationId: number): Promise<void> {

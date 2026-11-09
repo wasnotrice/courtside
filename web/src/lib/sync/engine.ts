@@ -10,6 +10,7 @@
 import { apply, MutationError } from './mutators';
 import { applyPull, computeView, type View } from './replay';
 import { addUnique, type LocalStore } from './store';
+import { emptyState } from './types';
 import type { PokeSource, Transport } from './transport';
 import type { MutationInput, PendingMutation, Rejection, State } from './types';
 
@@ -35,6 +36,12 @@ export interface SyncSnapshot {
 
 export type MutateResult = { ok: true } | { ok: false; reason: string };
 
+/**
+ * The most mutations sent in one push. The server refuses more than 500
+ * (Courtside.Sync.max_mutations/0); a longer queue goes in several rounds.
+ */
+export const PUSH_BATCH = 200;
+
 export interface EngineOptions {
 	store: LocalStore;
 	transport: Transport;
@@ -49,6 +56,7 @@ export class SyncEngine {
 	private viewCache!: View;
 	private clientId!: string;
 	private cursor = 0;
+	private dataId: string | null = null;
 	private lastMutationId = 0;
 	private pending: PendingMutation[] = [];
 	private rejections: Rejection[] = [];
@@ -183,6 +191,7 @@ export class SyncEngine {
 		const snap = await this.opts.store.load();
 		this.clientId = snap.clientId;
 		this.cursor = snap.cursor;
+		this.dataId = snap.dataId;
 		this.lastMutationId = snap.lastMutationId;
 		this.base = snap.base;
 		this.pending = snap.pending;
@@ -218,17 +227,29 @@ export class SyncEngine {
 			// A failed push doesn't stop the pull: one-way signal, or a push the
 			// server keeps refusing, shouldn't also cut this device off from updates.
 			let pushError: unknown = null;
-			if (this.pending.length > 0) {
+			const batch = this.pending.slice(0, PUSH_BATCH);
+			if (batch.length > 0) {
 				await this.opts.transport
-					.push({ client_id: this.clientId, mutations: this.pending })
+					.push({ client_id: this.clientId, mutations: batch })
 					.catch((e) => (pushError = e));
 			}
 
-			const pull = await this.opts.transport.pull(this.clientId, this.cursor);
+			let pull = await this.opts.transport.pull(this.clientId, this.cursor);
+
+			// The server's data was recreated or restored: its versions no longer
+			// line up with this cursor. Start the base over, keeping the queue.
+			if ((this.dataId !== null && pull.data_id !== this.dataId) || pull.cursor < this.cursor) {
+				await this.opts.store.restartBase();
+				this.base = emptyState();
+				this.cursor = 0;
+				pull = await this.opts.transport.pull(this.clientId, 0);
+			}
+
 			await this.opts.store.applyPull(pull);
 
 			this.base = applyPull(this.base, pull.changes);
 			this.cursor = pull.cursor;
+			this.dataId = pull.data_id;
 			this.lastMutationId = pull.last_mutation_id;
 			this.pending = this.pending.filter((m) => m.id > pull.last_mutation_id);
 			const rejections = [...this.rejections];
@@ -236,6 +257,8 @@ export class SyncEngine {
 			this.rejections = rejections;
 			this.lastSyncedAt = new Date();
 			if (pushError) throw pushError;
+			// A full batch went out and more are queued: go again for the rest.
+			if (batch.length === PUSH_BATCH && this.pending.length > 0) this.again = true;
 
 			this.failures = 0;
 			this.lastError = null;
