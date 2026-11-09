@@ -1,0 +1,239 @@
+{
+  "given": {
+    "players": [
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "name": "Ana",
+        "jersey": "4",
+        "active": true
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "creates a player",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "Ben",
+          "jersey": "12",
+          "active": true
+        }
+      },
+      "expect": {
+        "rows": {
+          "players": [
+            {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Ana",
+              "jersey": "4",
+              "active": true
+            },
+            {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Ben",
+              "jersey": "12",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "trims the name",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "  Ben  ",
+          "jersey": "12",
+          "active": true
+        }
+      },
+      "expect": {
+        "rows": {
+          "players": [
+            {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Ana",
+              "jersey": "4",
+              "active": true
+            },
+            {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Ben",
+              "jersey": "12",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a blank name is refused",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "   ",
+          "jersey": "12",
+          "active": true
+        }
+      },
+      "expect": {
+        "rejected": "Name can't be blank"
+      }
+    },
+    {
+      "name": "a name over 100 characters is refused",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+          "jersey": "12",
+          "active": true
+        }
+      },
+      "expect": {
+        "rejected": "Name should be at most 100 character(s)"
+      }
+    },
+    {
+      "name": "a new player without jersey or active gets the defaults",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "Ben"
+        }
+      },
+      "expect": {
+        "rows": {
+          "players": [
+            {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Ana",
+              "jersey": "4",
+              "active": true
+            },
+            {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Ben",
+              "jersey": "",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a null jersey becomes blank",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "Ben",
+          "jersey": null,
+          "active": true
+        }
+      },
+      "expect": {
+        "rows": {
+          "players": [
+            {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Ana",
+              "jersey": "4",
+              "active": true
+            },
+            {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Ben",
+              "jersey": "",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a blank jersey stays blank",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "name": "Ben",
+          "jersey": "",
+          "active": true
+        }
+      },
+      "expect": {
+        "rows": {
+          "players": [
+            {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Ana",
+              "jersey": "4",
+              "active": true
+            },
+            {
+              "id": "22222222-2222-4222-8222-222222222222",
+              "name": "Ben",
+              "jersey": "",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "updates an existing player",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "11111111-1111-4111-8111-111111111111",
+          "name": "Ana B",
+          "jersey": "4",
+          "active": false
+        }
+      },
+      "expect": {
+        "rows": {
+          "players": [
+            {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Ana B",
+              "jersey": "4",
+              "active": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an update that leaves out a field keeps its value",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "11111111-1111-4111-8111-111111111111",
+          "name": "Ana B"
+        }
+      },
+      "expect": {
+        "rows": {
+          "players": [
+            {
+              "id": "11111111-1111-4111-8111-111111111111",
+              "name": "Ana B",
+              "jersey": "4",
+              "active": true
+            }
+          ]
+        }
+      },
+      "known_difference": "The client fills a missing jersey with \"\" and active with true; the server keeps the stored values. Phase 1, step 2 (partial updates) fixes this."
+    }
+  ]
+}

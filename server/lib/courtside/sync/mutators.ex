@@ -15,15 +15,42 @@ defmodule Courtside.Sync.Mutators do
   alias Courtside.Repo
   alias Courtside.Practice.{Player, Drill, DrillRun, Result}
 
-  def run("player.put", args, v), do: put_player(args, v)
-  def run("drill.put", args, v), do: put_drill(args, v)
-  def run("run.create", args, v), do: create_run(args, v)
-  def run("run.set_setup", args, v), do: set_run_setup(args, v)
-  def run("run.delete", args, v), do: delete_run(args, v)
-  def run("result.set_value", args, v), do: set_result_value(args, v)
-  def run("result.set_setup", args, v), do: set_result_setup(args, v)
-  def run("result.clear", args, v), do: clear_result(args, v)
-  def run(name, _args, _v), do: {:error, "Unknown change type: #{name}"}
+  # The arguments each mutation accepts. Anything else is refused rather than
+  # silently dropped by `cast`, so a field name the client and server disagree
+  # on fails loudly. Matches FIELDS in web/src/lib/sync/mutators.ts.
+  @fields %{
+    "player.put" => ~w(id name jersey active),
+    "drill.put" => ~w(id name kind default_setup archived),
+    "run.create" => ~w(id date drill_id setup),
+    "run.set_setup" => ~w(id setup),
+    "run.delete" => ~w(id),
+    "result.set_value" => ~w(drill_run_id player_id value),
+    "result.set_setup" => ~w(drill_run_id player_id setup),
+    "result.clear" => ~w(drill_run_id player_id)
+  }
+
+  def run(name, args, v) do
+    case @fields do
+      %{^name => fields} ->
+        # Args that aren't a map crash here, and Sync turns the crash into a rejection.
+        case args |> Map.keys() |> Kernel.--(fields) |> Enum.sort() do
+          [] -> dispatch(name, args, v)
+          [field | _] -> {:error, "Unknown field: #{field}"}
+        end
+
+      _ ->
+        {:error, "Unknown change type: #{name}"}
+    end
+  end
+
+  defp dispatch("player.put", args, v), do: put_player(args, v)
+  defp dispatch("drill.put", args, v), do: put_drill(args, v)
+  defp dispatch("run.create", args, v), do: create_run(args, v)
+  defp dispatch("run.set_setup", args, v), do: set_run_setup(args, v)
+  defp dispatch("run.delete", args, v), do: delete_run(args, v)
+  defp dispatch("result.set_value", args, v), do: set_result_value(args, v)
+  defp dispatch("result.set_setup", args, v), do: set_result_setup(args, v)
+  defp dispatch("result.clear", args, v), do: clear_result(args, v)
 
   # --- players and drills ---------------------------------------------------
 
