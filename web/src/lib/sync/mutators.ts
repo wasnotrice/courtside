@@ -10,6 +10,7 @@
 
 import {
 	KINDS,
+	SPORTS,
 	resultKey,
 	type Drill,
 	type Kind,
@@ -17,9 +18,13 @@ import {
 	type MutationInput,
 	type MutationName,
 	type Player,
+	type Program,
 	type Result,
+	type RosterEntry,
 	type Run,
-	type State
+	type Season,
+	type State,
+	type Team
 } from './types';
 
 /** A mutation that doesn't apply. `message` is shown to the coach. */
@@ -31,47 +36,131 @@ const fail = (message: string): never => {
 
 type Mutator<N extends MutationName> = (state: State, args: MutationArgs[N]) => State;
 
+// The order of checks matches the server's, so a case with one problem gets
+// the same message on both sides (see spec/mutations/).
 const mutators: { [N in MutationName]: Mutator<N> } = {
-	'player.put': (state, args) => {
-		const name = (args.name ?? '').trim();
-		if (!name) fail("Name can't be blank");
-		if (name.length > 100) fail('Name should be at most 100 character(s)');
+	'program.put': (state, args) => {
+		const id = uuid(args.id);
+		const name = checkName(args.name);
+		if (!SPORTS.includes(args.sport)) fail('Sport must be basketball');
 
-		const player: Player = {
-			id: uuid(args.id),
-			name,
-			jersey: args.jersey ?? '',
-			active: args.active ?? true
-		};
-		return { ...state, players: put(state.players, player.id, player) };
+		const program: Program = { id, name, sport: args.sport };
+		return { ...state, programs: put(state.programs, id, program) };
+	},
+
+	'season.put': (state, args) => {
+		const id = uuid(args.id);
+		const name = checkName(args.name);
+		const starts = checkDate(args.starts_on, 'Starts on');
+		const ends = checkDate(args.ends_on, 'Ends on');
+		if (ends < starts) fail('Ends on must be on or after the start date');
+
+		for (const other of state.seasons.values()) {
+			if (other.id !== id && other.starts_on <= ends && other.ends_on >= starts) {
+				fail(`Overlaps the ${other.name} season.`);
+			}
+		}
+
+		const season: Season = { id, name, starts_on: starts, ends_on: ends };
+		return { ...state, seasons: put(state.seasons, id, season) };
+	},
+
+	'team.put': (state, args) => {
+		const id = uuid(args.id);
+		const program = liveProgram(state, args.program_id);
+		const name = checkName(args.name);
+		unchangedProgram(state.teams.get(id), program, 'team');
+
+		const team: Team = { id, program_id: program.id, name };
+		return { ...state, teams: put(state.teams, id, team) };
+	},
+
+	'player.put': (state, args) => {
+		const id = uuid(args.id);
+		const program = liveProgram(state, args.program_id);
+		const name = checkName(args.name);
+		unchangedProgram(state.players.get(id), program, 'player');
+
+		const player: Player = { id, program_id: program.id, name };
+		return { ...state, players: put(state.players, id, player) };
+	},
+
+	'roster.put': (state, args) => {
+		const id = uuid(args.id);
+		const existing = state.roster_entries.get(id);
+		if (
+			existing &&
+			(existing.team_id !== args.team_id ||
+				existing.season_id !== args.season_id ||
+				existing.player_id !== args.player_id)
+		) {
+			fail("A roster entry can't move. Remove it and add a new one.");
+		}
+
+		const team = state.teams.get(args.team_id) ?? fail('That team no longer exists.');
+		const season = state.seasons.get(args.season_id) ?? fail('That season no longer exists.');
+		const player = state.players.get(args.player_id) ?? fail('That player no longer exists.');
+		if (player.program_id !== team.program_id) fail('That player is in a different program.');
+
+		for (const other of state.roster_entries.values()) {
+			if (other.id !== id && other.team_id === team.id && other.season_id === season.id && other.player_id === player.id) {
+				fail('Already on that team this season.');
+			}
+		}
+
+		const jersey = args.jersey ?? '';
+		if (jersey.length > 10) fail('Jersey should be at most 10 character(s)');
+
+		const entry: RosterEntry = { id, team_id: team.id, season_id: season.id, player_id: player.id, jersey };
+		return { ...state, roster_entries: put(state.roster_entries, id, entry) };
+	},
+
+	'roster.remove': (state, args) => {
+		if (!state.roster_entries.has(args.id)) return state;
+
+		const roster_entries = new Map(state.roster_entries);
+		roster_entries.delete(args.id);
+		return { ...state, roster_entries };
 	},
 
 	'drill.put': (state, args) => {
-		const name = (args.name ?? '').trim();
-		if (!name) fail("Name can't be blank");
+		const id = uuid(args.id);
+		const program = liveProgram(state, args.program_id);
+		const name = checkName(args.name);
 		if (!KINDS.includes(args.kind)) fail('Kind must be makes, count or time');
 
-		const existing = state.drills.get(args.id);
+		const existing = state.drills.get(id);
 		if (existing && existing.kind !== args.kind) fail("Kind can't change after the drill is created");
+		unchangedProgram(existing, program, 'drill');
 		positiveOrNull(args.default_setup, 'Default setup');
 
 		const drill: Drill = {
-			id: uuid(args.id),
+			id,
+			program_id: program.id,
 			name,
 			kind: args.kind,
 			default_setup: args.default_setup ?? null,
 			archived: args.archived ?? false
 		};
-		return { ...state, drills: put(state.drills, drill.id, drill) };
+		return { ...state, drills: put(state.drills, id, drill) };
 	},
 
 	'run.create': (state, args) => {
+		const program = liveProgram(state, args.program_id);
 		const drill = state.drills.get(args.drill_id) ?? fail('That drill no longer exists.');
-		if (!/^\d{4}-\d{2}-\d{2}$/.test(args.date ?? '')) fail('Date is invalid');
+		if (drill.program_id !== program.id) fail('That drill is in a different program.');
 		if (state.runs.has(args.id)) fail('Id already exists');
+		if (!isDate(args.date)) fail('Date is invalid');
 		checkRunSetup(drill.kind, args.setup);
+		if (!seasonOf(state, args.date)) fail('No season includes that date.');
 
-		const run: Run = { id: uuid(args.id), date: args.date, drill_id: drill.id, setup: args.setup ?? null };
+		const run: Run = {
+			id: uuid(args.id),
+			program_id: program.id,
+			date: args.date,
+			drill_id: drill.id,
+			setup: args.setup ?? null
+		};
 		return { ...state, runs: put(state.runs, run.id, run) };
 	},
 
@@ -105,7 +194,7 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	'result.set_value': (state, args) => {
 		const run = liveRun(state, args.drill_run_id);
 		const drill = drillFor(state, run);
-		livePlayer(state, args.player_id);
+		samePlayerProgram(livePlayer(state, args.player_id), run);
 
 		const existing = getResult(state, run.id, args.player_id);
 		const value = parseValue(drill.kind, args.value, existing.setup ?? run.setup);
@@ -115,7 +204,7 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	'result.set_setup': (state, args) => {
 		const run = liveRun(state, args.drill_run_id);
 		const drill = drillFor(state, run);
-		livePlayer(state, args.player_id);
+		samePlayerProgram(livePlayer(state, args.player_id), run);
 		positiveOrNull(args.setup, 'Setup');
 
 		const existing = getResult(state, run.id, args.player_id);
@@ -142,9 +231,14 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
  * instead of being dropped by the server. Matches @fields in mutators.ex.
  */
 const FIELDS: { [N in MutationName]: readonly (keyof MutationArgs[N])[] } = {
-	'player.put': ['id', 'name', 'jersey', 'active'],
-	'drill.put': ['id', 'name', 'kind', 'default_setup', 'archived'],
-	'run.create': ['id', 'date', 'drill_id', 'setup'],
+	'program.put': ['id', 'name', 'sport'],
+	'season.put': ['id', 'name', 'starts_on', 'ends_on'],
+	'team.put': ['id', 'program_id', 'name'],
+	'player.put': ['id', 'program_id', 'name'],
+	'roster.put': ['id', 'team_id', 'season_id', 'player_id', 'jersey'],
+	'roster.remove': ['id'],
+	'drill.put': ['id', 'program_id', 'name', 'kind', 'default_setup', 'archived'],
+	'run.create': ['id', 'program_id', 'date', 'drill_id', 'setup'],
 	'run.set_setup': ['id', 'setup'],
 	'run.delete': ['id'],
 	'result.set_value': ['drill_run_id', 'player_id', 'value'],
@@ -179,6 +273,44 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function uuid(id: string): string {
 	if (!UUID.test(id ?? '')) fail('The server could not apply this change.');
 	return id;
+}
+
+function checkName(raw: string | undefined): string {
+	const name = (raw ?? '').trim();
+	if (!name) fail("Name can't be blank");
+	if (name.length > 100) fail('Name should be at most 100 character(s)');
+	return name;
+}
+
+/** A real calendar date as YYYY-MM-DD, like Ecto's :date cast. */
+export function isDate(s: unknown): s is string {
+	if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+	const d = new Date(`${s}T00:00:00Z`);
+	return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+function checkDate(s: unknown, label: string): string {
+	if (s === null || s === undefined || s === '') fail(`${label} can't be blank`);
+	if (!isDate(s)) fail(`${label} is invalid`);
+	return s as string;
+}
+
+/** The live season whose dates include `date`, if any. Seasons never overlap. */
+export function seasonOf(state: State, date: string): Season | undefined {
+	for (const s of state.seasons.values()) if (s.starts_on <= date && s.ends_on >= date) return s;
+	return undefined;
+}
+
+function liveProgram(state: State, id: string): Program {
+	return state.programs.get(id) ?? fail('That program no longer exists.');
+}
+
+function unchangedProgram(existing: { program_id: string } | undefined, program: Program, what: string) {
+	if (existing && existing.program_id !== program.id) fail(`Program can't change after the ${what} is created`);
+}
+
+function samePlayerProgram(player: Player, run: Run) {
+	if (player.program_id !== run.program_id) fail('That player is in a different program.');
 }
 
 function liveRun(state: State, id: string): Run {

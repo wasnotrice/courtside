@@ -4,9 +4,12 @@
 // the Elixir rules are tested in server/test.
 
 import { apply, MutationError } from '../mutators';
+import { TABLES } from '../replay';
+import { structure } from './fixtures';
 import type { PokeSource, Transport } from '../transport';
 import {
 	emptyState,
+	type PendingMutation,
 	type PullResponse,
 	type PushRequest,
 	type PushResponse,
@@ -19,10 +22,23 @@ type Tables = { [K in keyof State]: Map<string, (State[K] extends ReadonlyMap<st
 
 export class FakeServer {
 	version = 0;
-	private tables: Tables = { players: new Map(), drills: new Map(), runs: new Map(), results: new Map() };
+	/** Changes when the fake server's data is "restored" (see restore()). */
+	dataId = crypto.randomUUID();
+	private tables = Object.fromEntries(TABLES.map((t) => [t, new Map()])) as unknown as Tables;
 	private clients = new Map<string, number>();
 	private rejections: (Rejection & { client_id: string; version: number })[] = [];
 	private pokeListeners = new Set<() => void>();
+
+	/** Starts with the fixtures' program and season, pushed by a setup client. */
+	constructor({ empty = false }: { empty?: boolean } = {}) {
+		if (!empty) {
+			this.push({
+				organization_id: 'fake',
+				client_id: 'setup',
+				mutations: structure().map((m, i) => ({ ...m, id: i + 1 }) as PendingMutation)
+			});
+		}
+	}
 
 	push({ client_id, mutations }: PushRequest): PushResponse {
 		const version = ++this.version;
@@ -55,14 +71,12 @@ export class FakeServer {
 
 		return structuredClone({
 			cursor: this.version,
+			data_id: this.dataId,
 			last_mutation_id: this.clients.get(clientId) ?? 0,
 			rejections: this.rejections.filter((r) => r.client_id === clientId && r.version > cursor).map(strip),
-			changes: {
-				players: since(this.tables.players),
-				drills: since(this.tables.drills),
-				runs: since(this.tables.runs),
-				results: since(this.tables.results)
-			}
+			changes: Object.fromEntries(
+				TABLES.map((t) => [t, since(this.tables[t] as Map<string, Row>)])
+			) as unknown as PullResponse['changes']
 		});
 	}
 
@@ -75,10 +89,7 @@ export class FakeServer {
 		};
 		return {
 			...emptyState(),
-			players: live(this.tables.players),
-			drills: live(this.tables.drills),
-			runs: live(this.tables.runs),
-			results: live(this.tables.results)
+			...Object.fromEntries(TABLES.map((t) => [t, live(this.tables[t] as Map<string, Row>)]))
 		} as State;
 	}
 

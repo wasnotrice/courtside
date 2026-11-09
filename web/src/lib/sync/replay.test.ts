@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { applyPull, computeView } from './replay';
-import { drill, player, run, setValue } from './testing/fixtures';
+import { apply } from './mutators';
+import { applyPull, computeView, TABLES } from './replay';
+import { drill, player, run, setValue, structure } from './testing/fixtures';
 import { emptyState, resultKey, type PendingMutation, type PullResponse } from './types';
+
+/** A base holding the fixtures' program and season, as after a first pull. */
+const base = () => structure().reduce(apply, emptyState());
 
 const pending = (...ms: Omit<PendingMutation, 'id'>[]): PendingMutation[] =>
 	ms.map((m, i) => ({ ...m, id: i + 1 }) as PendingMutation);
 
-const noChanges = (): PullResponse['changes'] => ({ players: [], drills: [], runs: [], results: [] });
+const noChanges = () => Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as PullResponse['changes'];
 
 describe('computeView', () => {
 	it('replays pending mutations on top of the base', () => {
 		const p = player();
-		const view = computeView(emptyState(), pending(p));
+		const view = computeView(base(), pending(p));
 		expect(view.state.players.get(p.args.id)?.name).toBe('Ana');
 		expect(view.skipped.size).toBe(0);
 	});
@@ -24,23 +28,23 @@ describe('computeView', () => {
 		const playerId = p.args.id;
 
 		const queue = pending(p, d, r, setValue(runId, playerId, 60), setValue(runId, playerId, 30));
-		const view = computeView(emptyState(), queue);
+		const view = computeView(base(), queue);
 
 		expect(view.skipped).toEqual(new Map([[4, '60 makes is more than 50 shots.']]));
 		expect(view.state.results.get(resultKey(runId, playerId))?.value).toBe(30);
 	});
 
 	it('leaves the base untouched', () => {
-		const base = emptyState();
-		computeView(base, pending(player()));
-		expect(base.players.size).toBe(0);
+		const before = base();
+		computeView(before, pending(player()));
+		expect(before.players.size).toBe(0);
 	});
 });
 
 describe('applyPull', () => {
 	it('writes rows and removes tombstones', () => {
 		const id = crypto.randomUUID();
-		const row = { id, name: 'Ana', jersey: '4', active: true };
+		const row = { id, program_id: crypto.randomUUID(), name: 'Ana' };
 		const withPlayer = applyPull(emptyState(), {
 			...noChanges(),
 			players: [{ ...row, deleted: false, version: 1 }]

@@ -16,6 +16,8 @@ async function device(server: FakeServer, opts: { pokes?: boolean } = {}) {
 	const store = new MemoryStore();
 	const engine = await SyncEngine.open({ store, transport, pokes: opts.pokes ? server.pokes() : undefined });
 	engines.push(engine);
+	// Pull the program and season the fixtures belong to.
+	await engine.sync();
 	return { engine, transport, store };
 }
 
@@ -73,16 +75,17 @@ describe('a single device', () => {
 	it('sends nothing while the offline switch is on, and syncs when it goes off', async () => {
 		const server = new FakeServer();
 		const { engine } = await device(server);
+		const before = server.version;
 		engine.setOffline(true);
 
 		await engine.mutate(player());
 		await engine.sync();
-		expect(server.version).toBe(0);
+		expect(server.version).toBe(before);
 		expect(engine.snapshot.phase).toBe('offline');
 
 		engine.setOffline(false);
 		await settle();
-		expect(server.version).toBeGreaterThan(0);
+		expect(server.version).toBeGreaterThan(before);
 		expect(engine.snapshot.pending).toHaveLength(0);
 		expect(engine.snapshot.phase).toBe('idle');
 	});
