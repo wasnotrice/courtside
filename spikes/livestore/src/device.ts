@@ -64,6 +64,9 @@ export const makeDevice = async (name: string, server: SyncServer | undefined, o
   }
 }
 
+/** The global part of the session head: 'e4r1' (after a rebase) and 'e4' are both 4. */
+export const head = (d: Device) => Number(/^e(\d+)/.exec(d.store.syncStatus().localHead)![1])
+
 export const until = async (cond: () => boolean, timeoutMs = 10_000, label = 'condition') => {
   const start = Date.now()
   while (!cond()) {
