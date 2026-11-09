@@ -134,6 +134,12 @@ export interface SchemaOptions {
   /** Include the v2.PlayRecorded event (a newer app version). */
   v2?: boolean
   unknownEvents?: 'warn' | 'ignore' | 'fail'
+  /**
+   * Change the state tables (adds an empty `app_version` table). The state database is
+   * keyed by a hash of the tables, so this is what makes LiveStore rebuild state from the
+   * event log; adding a materializer alone does not.
+   */
+  bumpState?: boolean
 }
 
 export const makeGameSchema = (opts: SchemaOptions = {}) => {
@@ -192,7 +198,10 @@ export const makeGameSchema = (opts: SchemaOptions = {}) => {
       record(args, playRecordedV2.name, ctx),
     )
 
-  const state = State.SQLite.makeState({ tables, materializers: State.SQLite.materializers(allEvents as typeof events, handlers as any) })
+  const stateTables: Record<string, any> = { ...tables }
+  if (opts.bumpState)
+    stateTables.app_version = State.SQLite.table({ name: 'app_version', columns: { id: State.SQLite.text({ primaryKey: true }) } })
+  const state = State.SQLite.makeState({ tables: stateTables as typeof tables, materializers: State.SQLite.materializers(allEvents as typeof events, handlers as any) })
   return makeSchema({
     events: allEvents as typeof events,
     state,
