@@ -262,6 +262,12 @@ undo) on LiveStore, behind the same engine surface the UI uses (`snapshot`, `sub
 is replanned around it before it starts. Otherwise phase 2 goes ahead as written, and
 the write-up records why.
 
+**Done (2026-11-09): stay hand-rolled.** See
+[`research/livestore-spike.md`](research/livestore-spike.md). LiveStore handled offline
+plays well, but its sync protocol has no way for the server to refuse a change, rules
+depend on every phone's app version, and a phone can't tell it's unsynced. Phase 2 goes
+ahead as written. The spike's code is on branch `spike/livestore`.
+
 ---
 
 ## Phase 2: games
