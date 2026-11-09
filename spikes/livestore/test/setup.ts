@@ -2,4 +2,4 @@
 // and that check misfires for materializers that read state when several events arrive
 // in one pull batch (livestore issue #503). See smoke.test.ts. Everything else runs as
 // production does.
-process.env.NODE_ENV = 'production'
+process.env.NODE_ENV = process.env.SPIKE_ENV ?? 'production'

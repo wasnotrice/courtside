@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'vitest'
-import { makeDevice, until, type Device } from '../src/device.ts'
+import { head, makeDevice, until, type Device } from '../src/device.ts'
 import { events } from '../src/schema.ts'
 import { SyncServer } from '../src/server.ts'
 
@@ -28,25 +28,38 @@ test('a play goes from phone A through the server to phone B, live', async () =>
   expect(server.events.map((e) => [e.seqNum, e.parentSeqNum])).toEqual([[1, 0], [2, 1]])
 })
 
-// Finding: in dev mode (NODE_ENV !== 'production') LiveStore compares a "materializer
-// hash" computed by the leader with the session's. For events pulled in one batch the
-// leader computes it before the earlier events of the batch are applied (issue #503),
-// so a materializer that reads state (here: "does the game exist?") hashes differently,
-// the session raises MaterializerHashMismatchError, and with the default
-// onSyncError: 'ignore' the phone just stops receiving. Nothing is thrown to the app.
-test('dev mode: a state-reading materializer stalls a phone that pulls game + play in one batch', async () => {
-  process.env.NODE_ENV = 'development'
+// Finding: in dev mode (NODE_ENV !== 'production'; isDevEnv() in
+// @livestore/common/dist/leader-thread/materialize-event.js) LiveStore compares a hash of
+// each materializer's output between the leader and the session. A materializer that
+// reads state with ctx.query can hash differently while a pulled batch is rebased, so
+// the session raises MaterializerHashMismatchError and, with onSyncError: 'ignore', the
+// phone silently stops converging. Open upstream as livestorejs/livestore#503 (since
+// July 2025). Production builds skip the check, which is why the rest of the suite runs
+// with NODE_ENV=production (test/setup.ts).
+const deletedPlayScenario = async (rules: 'skip' | 'none') => {
   const server = new SyncServer()
-  const a = await makeDevice('phone-a', server)
-  open.push(a)
+  const a = await makeDevice('phone-a', server, { rules })
+  const b = await makeDevice('phone-b', server, { rules })
+  open.push(a, b)
   a.store.commit(events.gameCreated({ id: 'g1', opponent: 'Lincoln' }), play('p1', 'phone-a'))
-  await until(() => server.events.length === 2, 10_000, 'server to get both')
+  await until(() => b.plays().length === 1, 10_000, 'B to get p1')
+  a.setOnline(false)
+  b.store.commit(events.playDeleted({ id: 'p1' }))
+  await until(() => server.events.length === 3, 10_000, 'delete reaches server')
+  a.store.commit(events.playEdited({ id: 'p1', player_id: 'riley' }))
+  a.setOnline(true)
+  return until(() => head(a) === 4 && head(b) === 4, 5_000, 'converge').then(
+    () => 'converged',
+    () => 'stalled'
+  )
+}
 
-  const checked = await makeDevice('phone-b', server, { rules: 'skip' })
-  const unchecked = await makeDevice('phone-c', server, { rules: 'none' })
-  open.push(checked, unchecked)
-  await until(() => unchecked.plays().length === 1, 10_000, 'phone without state reads to receive')
-  await new Promise((r) => setTimeout(r, 3000))
-  expect(checked.plays()).toHaveLength(0)
-  expect(checked.store.syncStatus().localHead).toBe('e0')
+test('dev mode: rebasing an edit whose materializer reads state stalls sync (livestore#503)', async () => {
+  process.env.NODE_ENV = 'development'
+  expect(await deletedPlayScenario('skip')).toBe('stalled')
+})
+
+test('dev mode: the same scenario converges when materializers do not read state', async () => {
+  process.env.NODE_ENV = 'development'
+  expect(await deletedPlayScenario('none')).toBe('converged')
 })

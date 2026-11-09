@@ -46,7 +46,8 @@ export const tables = {
   refused: State.SQLite.table({
     name: 'refused',
     columns: {
-      id: State.SQLite.integer({ primaryKey: true }),
+      // Play, event and global sequence number: the same on every device.
+      id: State.SQLite.text({ primaryKey: true }),
       play_id: State.SQLite.text(),
       event: State.SQLite.text(),
       reason: State.SQLite.text(),
@@ -136,13 +137,14 @@ export interface SchemaOptions {
 }
 
 export const makeGameSchema = (opts: SchemaOptions = {}) => {
-  const rules = opts.rules ?? 'skip'
+  const rules = opts.rules ?? ((process.env.SPIKE_RULES as RuleMode | undefined) ?? 'skip')
   const allEvents: Record<string, any> = { ...events }
   if (opts.v2) allEvents.playRecordedV2 = playRecordedV2
 
-  const refuse = (playId: string, event: string, reason: string) => {
+  const refuse = (playId: string, event: string, reason: string, ctx: any) => {
     if (rules === 'throw') throw new Error(reason)
-    return tables.refused.insert({ play_id: playId, event, reason } as any)
+    const id = `${playId}:${event}:${JSON.stringify(ctx.event.seqNum?.global ?? ctx.event.seqNum)}`
+    return tables.refused.insert({ id, play_id: playId, event, reason }).onConflict('id', 'replace')
   }
 
   // Raw SQL: the query builder's `.first({ fallback: () => null })` threw
@@ -153,9 +155,9 @@ export const makeGameSchema = (opts: SchemaOptions = {}) => {
   const record = (args: any, eventName: string, ctx: any) => {
     if (rules !== 'none') {
       const game = rowById(ctx, "games", args.game_id)
-      if (game == null || game.deleted) return refuse(args.id, eventName, 'That game was deleted.')
+      if (game == null || game.deleted) return refuse(args.id, eventName, 'That game was deleted.', ctx)
       const reason = playRuleViolation(args)
-      if (reason) return refuse(args.id, eventName, reason)
+      if (reason) return refuse(args.id, eventName, reason, ctx)
     }
     return tables.plays.insert({ foul_type: null, ...args })
   }
@@ -174,9 +176,9 @@ export const makeGameSchema = (opts: SchemaOptions = {}) => {
     [events.playEdited.name]: defineMaterializer(events.playEdited, ({ id, ...changes }, ctx) => {
       const current = rowById(ctx, "plays", id)
       if (rules !== 'none') {
-        if (current == null || current.deleted) return refuse(id, events.playEdited.name, 'That play was deleted.')
+        if (current == null || current.deleted) return refuse(id, events.playEdited.name, 'That play was deleted.', ctx)
         const reason = playRuleViolation({ ...current, ...changes })
-        if (reason) return refuse(id, events.playEdited.name, reason)
+        if (reason) return refuse(id, events.playEdited.name, reason, ctx)
       }
       if (Object.keys(changes).length === 0) return []
       return tables.plays.update(changes).where({ id })
