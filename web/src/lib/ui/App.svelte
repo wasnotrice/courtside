@@ -4,6 +4,7 @@
 	import EntryView from './EntryView.svelte';
 	import HistoryView from './HistoryView.svelte';
 	import PracticeView from './PracticeView.svelte';
+	import ProgramSetup from './ProgramSetup.svelte';
 	import RosterView from './RosterView.svelte';
 	import SyncInspector from './SyncInspector.svelte';
 
@@ -19,7 +20,9 @@
 </script>
 
 <div class="wrap-app">
-	{#if app.tab === 'today' && app.runId && app.view.runs.has(app.runId)}
+	{#if !app.program && app.tab !== 'sync'}
+		<ProgramSetup />
+	{:else if app.tab === 'today' && app.runId && app.view.runs.has(app.runId)}
 		{#key app.runId}
 			<EntryView runId={app.runId} />
 		{/key}

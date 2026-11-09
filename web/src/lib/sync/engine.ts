@@ -21,6 +21,8 @@ export interface SyncSnapshot {
 	view: State;
 	clientId: string;
 	cursor: number;
+	/** The server data id the base was pulled from; null before the first pull. */
+	dataId: string | null;
 	lastMutationId: number;
 	pending: readonly PendingMutation[];
 	/** Pending mutations that no longer apply locally, by id, with the reason. */
@@ -296,6 +298,7 @@ export class SyncEngine {
 			view: this.viewCache.state,
 			clientId: this.clientId,
 			cursor: this.cursor,
+			dataId: this.dataId,
 			lastMutationId: this.lastMutationId,
 			pending: this.pending,
 			skipped: this.viewCache.skipped,

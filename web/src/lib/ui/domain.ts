@@ -1,7 +1,18 @@
 // Display rules for drills and results, ported from docs/prototype.html. Pure
 // functions over the sync view; nothing here writes.
 
-import { resultKey, type Drill, type Kind, type Player, type Result, type Run, type State } from '$lib/sync/types';
+import { seasonOf } from '$lib/sync/mutators';
+import {
+	resultKey,
+	type Drill,
+	type Kind,
+	type MutationInput,
+	type Player,
+	type Result,
+	type Run,
+	type State,
+	type Team
+} from '$lib/sync/types';
 
 export const KINDS: Record<
 	Kind,
@@ -121,12 +132,107 @@ export function parseRoster(text: string) {
 
 // --- queries -------------------------------------------------------------------
 
-const jnum = (j: string) => (j === '' || j == null ? 999 : Number.isFinite(+j) ? +j : 998);
-export const byJersey = (a: Player, b: Player) => jnum(a.jersey) - jnum(b.jersey) || a.name.localeCompare(b.name);
+// --- seasons, teams and rosters ---------------------------------------------------
 
-/** Active players, plus inactive ones in `keep` (so their old results still show). */
-export function roster(state: State, keep?: Set<string>) {
-	return [...state.players.values()].filter((p) => p.active || keep?.has(p.id)).sort(byJersey);
+export { seasonOf };
+
+/** The school year a YYYY-MM-DD date falls in: August 1 to July 31. */
+export function schoolYear(date: string) {
+	const y = Number(date.slice(0, 4));
+	const start = Number(date.slice(5, 7)) >= 8 ? y : y - 1;
+	return { name: `${start}–${String(start + 1).slice(2)}`, starts_on: `${start}-08-01`, ends_on: `${start + 1}-07-31` };
+}
+
+/**
+ * What to queue so a season includes `date`: nothing if one does, otherwise a
+ * new season for its school year. Works offline, like any other change.
+ */
+export function ensureSeason(state: State, date: string): MutationInput[] {
+	if (seasonOf(state, date)) return [];
+	return [{ name: 'season.put', args: { id: crypto.randomUUID(), ...schoolYear(date) } }];
+}
+
+/** Varsity first, then JV, then the rest by name. */
+const teamRank = (t: Team) => (/varsity/i.test(t.name) ? 0 : /\bjv\b|junior/i.test(t.name) ? 1 : 2);
+
+export function teamsOf(state: State, programId: string | undefined): Team[] {
+	return [...state.teams.values()]
+		.filter((t) => t.program_id === programId)
+		.sort((a, b) => teamRank(a) - teamRank(b) || a.name.localeCompare(b.name));
+}
+
+/** A player as a roster shows them: the jersey worn on their highest team, and every team they're on. */
+export interface RosterRow {
+	player: Player;
+	jersey: string;
+	teamIds: string[];
+}
+
+const jnum = (j: string) => (j === '' || j == null ? 999 : Number.isFinite(+j) ? +j : 998);
+export const byJersey = (a: RosterRow, b: RosterRow) =>
+	jnum(a.jersey) - jnum(b.jersey) || a.player.name.localeCompare(b.player.name);
+
+/** Players on the program's teams in a season (or on one team), by jersey. */
+export function rosterOf(
+	state: State,
+	programId: string | undefined,
+	seasonId: string | undefined,
+	teamId?: string | null
+): RosterRow[] {
+	const rank = new Map(teamsOf(state, programId).map((t, i) => [t.id, i]));
+	const rows = new Map<string, RosterRow & { rank: number }>();
+
+	for (const e of state.roster_entries.values()) {
+		if (e.season_id !== seasonId || !rank.has(e.team_id) || (teamId && e.team_id !== teamId)) continue;
+		const player = state.players.get(e.player_id);
+		if (!player) continue;
+		const r = rank.get(e.team_id)!;
+		const row = rows.get(player.id);
+		if (!row) {
+			rows.set(player.id, { player, jersey: e.jersey, teamIds: [e.team_id], rank: r });
+		} else {
+			row.teamIds.push(e.team_id);
+			if (r < row.rank) Object.assign(row, { jersey: e.jersey, rank: r });
+		}
+	}
+
+	return [...rows.values()].map(({ rank: _r, ...row }) => row).sort(byJersey);
+}
+
+/**
+ * Who can have a result in a run: everyone on the program's rosters for the
+ * run's season (or one team's), plus, with no team filter, anyone who already
+ * has a result there, so no result is ever hidden.
+ */
+export function playersForRun(state: State, run: Run, teamId?: string | null): RosterRow[] {
+	const rows = rosterOf(state, run.program_id, seasonOf(state, run.date)?.id, teamId);
+	if (teamId) return rows;
+
+	const have = new Set(rows.map((r) => r.player.id));
+	for (const r of state.results.values()) {
+		const player = r.drill_run_id === run.id && !have.has(r.player_id) ? state.players.get(r.player_id) : undefined;
+		if (player) {
+			rows.push({ player, jersey: '', teamIds: [] });
+			have.add(player.id);
+		}
+	}
+	return rows.sort(byJersey);
+}
+
+/**
+ * The fields of `next` that differ from `existing`, plus the id: what a put
+ * should send, so edits on different devices don't overwrite each other.
+ * Null when nothing changed.
+ */
+export function changedFields<T extends { id: string }>(
+	existing: T | undefined,
+	next: Partial<T> & { id: string }
+): (Partial<T> & { id: string }) | null {
+	const out: Record<string, unknown> = { id: next.id };
+	for (const [k, v] of Object.entries(next)) {
+		if (k !== 'id' && (!existing || existing[k as keyof T] !== v)) out[k] = v;
+	}
+	return Object.keys(out).length > 1 || !existing ? (out as Partial<T> & { id: string }) : null;
 }
 
 /** A player's row in a run, value or not (it may only carry a setup override). */
