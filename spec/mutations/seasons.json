@@ -1,0 +1,169 @@
+{
+  "given": {
+    "seasons": [
+      {
+        "id": "f1111111-1111-4111-8111-111111111111",
+        "name": "2026–27",
+        "starts_on": "2026-08-01",
+        "ends_on": "2027-07-31"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "creates a season",
+      "mutation": {
+        "name": "season.put",
+        "args": {
+          "id": "f2222222-2222-4222-8222-222222222222",
+          "name": "2025–26",
+          "starts_on": "2025-08-01",
+          "ends_on": "2026-07-31"
+        }
+      },
+      "expect": {
+        "rows": {
+          "seasons": [
+            {
+              "id": "f1111111-1111-4111-8111-111111111111",
+              "name": "2026–27",
+              "starts_on": "2026-08-01",
+              "ends_on": "2027-07-31"
+            },
+            {
+              "id": "f2222222-2222-4222-8222-222222222222",
+              "name": "2025–26",
+              "starts_on": "2025-08-01",
+              "ends_on": "2026-07-31"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a blank name is refused",
+      "mutation": {
+        "name": "season.put",
+        "args": {
+          "id": "f2222222-2222-4222-8222-222222222222",
+          "name": "",
+          "starts_on": "2025-08-01",
+          "ends_on": "2026-07-31"
+        }
+      },
+      "expect": {
+        "rejected": "Name can't be blank"
+      }
+    },
+    {
+      "name": "an invalid date is refused",
+      "mutation": {
+        "name": "season.put",
+        "args": {
+          "id": "f2222222-2222-4222-8222-222222222222",
+          "name": "2025–26",
+          "starts_on": "2025-13-01",
+          "ends_on": "2026-07-31"
+        }
+      },
+      "expect": {
+        "rejected": "Starts on is invalid"
+      }
+    },
+    {
+      "name": "the end can't come before the start",
+      "mutation": {
+        "name": "season.put",
+        "args": {
+          "id": "f2222222-2222-4222-8222-222222222222",
+          "name": "2025–26",
+          "starts_on": "2025-08-01",
+          "ends_on": "2025-07-31"
+        }
+      },
+      "expect": {
+        "rejected": "Ends on must be on or after the start date"
+      }
+    },
+    {
+      "name": "seasons can't overlap",
+      "mutation": {
+        "name": "season.put",
+        "args": {
+          "id": "f2222222-2222-4222-8222-222222222222",
+          "name": "2025–26",
+          "starts_on": "2025-08-01",
+          "ends_on": "2026-09-01"
+        }
+      },
+      "expect": {
+        "rejected": "Overlaps the 2026–27 season."
+      }
+    },
+    {
+      "name": "a season's own dates don't count as an overlap",
+      "mutation": {
+        "name": "season.put",
+        "args": {
+          "id": "f1111111-1111-4111-8111-111111111111",
+          "name": "2026–27",
+          "starts_on": "2026-08-01",
+          "ends_on": "2027-06-30"
+        }
+      },
+      "expect": {
+        "rows": {
+          "seasons": [
+            {
+              "id": "f1111111-1111-4111-8111-111111111111",
+              "name": "2026–27",
+              "starts_on": "2026-08-01",
+              "ends_on": "2027-06-30"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a deleted season doesn't block its dates",
+      "with": {
+        "seasons": [
+          {
+            "id": "f3333333-3333-4333-8333-333333333333",
+            "name": "2025–26",
+            "starts_on": "2025-08-01",
+            "ends_on": "2026-07-31",
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "season.put",
+        "args": {
+          "id": "f2222222-2222-4222-8222-222222222222",
+          "name": "2025–26",
+          "starts_on": "2025-08-01",
+          "ends_on": "2026-07-31"
+        }
+      },
+      "expect": {
+        "rows": {
+          "seasons": [
+            {
+              "id": "f1111111-1111-4111-8111-111111111111",
+              "name": "2026–27",
+              "starts_on": "2026-08-01",
+              "ends_on": "2027-07-31"
+            },
+            {
+              "id": "f2222222-2222-4222-8222-222222222222",
+              "name": "2025–26",
+              "starts_on": "2025-08-01",
+              "ends_on": "2026-07-31"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "given": {
+    "programs": [
+      {
+        "id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Girls' basketball",
+        "sport": "basketball"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "creates a program",
+      "mutation": {
+        "name": "program.put",
+        "args": {
+          "id": "b2222222-2222-4222-8222-222222222222",
+          "name": "Boys' basketball",
+          "sport": "basketball"
+        }
+      },
+      "expect": {
+        "rows": {
+          "programs": [
+            {
+              "id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Girls' basketball",
+              "sport": "basketball"
+            },
+            {
+              "id": "b2222222-2222-4222-8222-222222222222",
+              "name": "Boys' basketball",
+              "sport": "basketball"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "trims the name",
+      "mutation": {
+        "name": "program.put",
+        "args": {
+          "id": "b2222222-2222-4222-8222-222222222222",
+          "name": " Boys' basketball ",
+          "sport": "basketball"
+        }
+      },
+      "expect": {
+        "rows": {
+          "programs": [
+            {
+              "id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Girls' basketball",
+              "sport": "basketball"
+            },
+            {
+              "id": "b2222222-2222-4222-8222-222222222222",
+              "name": "Boys' basketball",
+              "sport": "basketball"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a blank name is refused",
+      "mutation": {
+        "name": "program.put",
+        "args": {
+          "id": "b2222222-2222-4222-8222-222222222222",
+          "name": " ",
+          "sport": "basketball"
+        }
+      },
+      "expect": {
+        "rejected": "Name can't be blank"
+      }
+    },
+    {
+      "name": "an unknown sport is refused",
+      "mutation": {
+        "name": "program.put",
+        "args": {
+          "id": "b2222222-2222-4222-8222-222222222222",
+          "name": "Boys' basketball",
+          "sport": "soccer"
+        }
+      },
+      "expect": {
+        "rejected": "Sport must be basketball"
+      }
+    },
+    {
+      "name": "renames a program",
+      "mutation": {
+        "name": "program.put",
+        "args": {
+          "id": "b1111111-1111-4111-8111-111111111111",
+          "name": "Girls",
+          "sport": "basketball"
+        }
+      },
+      "expect": {
+        "rows": {
+          "programs": [
+            {
+              "id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Girls",
+              "sport": "basketball"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

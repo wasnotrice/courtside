@@ -1,8 +1,21 @@
 {
   "given": {
+    "programs": [
+      {
+        "id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Girls' basketball",
+        "sport": "basketball"
+      },
+      {
+        "id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Boys' basketball",
+        "sport": "basketball"
+      }
+    ],
     "drills": [
       {
         "id": "d1111111-1111-4111-8111-111111111111",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
         "name": "Free throws",
         "kind": "makes",
         "default_setup": 50,
@@ -12,11 +25,12 @@
   },
   "cases": [
     {
-      "name": "creates a makes drill",
+      "name": "creates a time drill",
       "mutation": {
         "name": "drill.put",
         "args": {
           "id": "d2222222-2222-4222-8222-222222222222",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Suicides",
           "kind": "time",
           "default_setup": 3,
@@ -28,6 +42,7 @@
           "drills": [
             {
               "id": "d1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
@@ -35,6 +50,7 @@
             },
             {
               "id": "d2222222-2222-4222-8222-222222222222",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
               "name": "Suicides",
               "kind": "time",
               "default_setup": 3,
@@ -50,6 +66,7 @@
         "name": "drill.put",
         "args": {
           "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Push-ups",
           "kind": "count",
           "default_setup": null,
@@ -61,6 +78,7 @@
           "drills": [
             {
               "id": "d1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
@@ -68,6 +86,7 @@
             },
             {
               "id": "d3333333-3333-4333-8333-333333333333",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
               "name": "Push-ups",
               "kind": "count",
               "default_setup": null,
@@ -83,6 +102,7 @@
         "name": "drill.put",
         "args": {
           "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": " Push-ups ",
           "kind": "count",
           "default_setup": null,
@@ -94,6 +114,7 @@
           "drills": [
             {
               "id": "d1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
@@ -101,6 +122,7 @@
             },
             {
               "id": "d3333333-3333-4333-8333-333333333333",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
               "name": "Push-ups",
               "kind": "count",
               "default_setup": null,
@@ -116,6 +138,7 @@
         "name": "drill.put",
         "args": {
           "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "",
           "kind": "count",
           "default_setup": null,
@@ -127,11 +150,29 @@
       }
     },
     {
+      "name": "an unknown program is refused",
+      "mutation": {
+        "name": "drill.put",
+        "args": {
+          "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "99999999-9999-4999-8999-999999999999",
+          "name": "Push-ups",
+          "kind": "count",
+          "default_setup": null,
+          "archived": false
+        }
+      },
+      "expect": {
+        "rejected": "That program no longer exists."
+      }
+    },
+    {
       "name": "an unknown kind is refused",
       "mutation": {
         "name": "drill.put",
         "args": {
           "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Push-ups",
           "kind": "streak",
           "default_setup": null,
@@ -148,6 +189,7 @@
         "name": "drill.put",
         "args": {
           "id": "d1111111-1111-4111-8111-111111111111",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Free throws",
           "kind": "count",
           "default_setup": 50,
@@ -159,11 +201,29 @@
       }
     },
     {
+      "name": "a drill can't move to another program",
+      "mutation": {
+        "name": "drill.put",
+        "args": {
+          "id": "d1111111-1111-4111-8111-111111111111",
+          "program_id": "b2222222-2222-4222-8222-222222222222",
+          "name": "Free throws",
+          "kind": "makes",
+          "default_setup": 50,
+          "archived": false
+        }
+      },
+      "expect": {
+        "rejected": "Program can't change after the drill is created"
+      }
+    },
+    {
       "name": "a zero default setup is refused",
       "mutation": {
         "name": "drill.put",
         "args": {
           "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Push-ups",
           "kind": "count",
           "default_setup": 0,
@@ -180,6 +240,7 @@
         "name": "drill.put",
         "args": {
           "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Push-ups",
           "kind": "count",
           "default_setup": "ten",
@@ -196,6 +257,7 @@
         "name": "drill.put",
         "args": {
           "id": "d1111111-1111-4111-8111-111111111111",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Free throws",
           "kind": "makes",
           "default_setup": 50,
@@ -207,6 +269,7 @@
           "drills": [
             {
               "id": "d1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
@@ -217,11 +280,60 @@
       }
     },
     {
+      "name": "an update that leaves out a field keeps its value",
+      "with": {
+        "drills": [
+          {
+            "id": "d3333333-3333-4333-8333-333333333333",
+            "program_id": "b1111111-1111-4111-8111-111111111111",
+            "name": "Push-ups",
+            "kind": "count",
+            "default_setup": null,
+            "archived": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "drill.put",
+        "args": {
+          "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
+          "name": "Push-ups",
+          "kind": "count",
+          "default_setup": null
+        }
+      },
+      "expect": {
+        "rows": {
+          "drills": [
+            {
+              "id": "d1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Free throws",
+              "kind": "makes",
+              "default_setup": 50,
+              "archived": false
+            },
+            {
+              "id": "d3333333-3333-4333-8333-333333333333",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Push-ups",
+              "kind": "count",
+              "default_setup": null,
+              "archived": true
+            }
+          ]
+        }
+      },
+      "known_difference": "The client fills a missing archived with false; the server keeps the stored value. Phase 1, step 2 (partial updates) fixes this."
+    },
+    {
       "name": "a blank name and an unknown kind",
       "mutation": {
         "name": "drill.put",
         "args": {
           "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "",
           "kind": "streak",
           "default_setup": null,
