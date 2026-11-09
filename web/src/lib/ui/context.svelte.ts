@@ -27,7 +27,8 @@ const remember = (key: string, value: string) => {
 export type Tab = 'today' | 'roster' | 'history' | 'sync';
 
 export class AppState {
-	tab = $state<Tab>('today');
+	// The Tauri spike build opens on Sync, since the simulator can't be tapped from scripts.
+	tab = $state<Tab>((import.meta.env.VITE_START_TAB as Tab | undefined) ?? 'today');
 	date = $state(todayISO());
 	runId = $state<string | null>(null);
 	historyDrill = $state<string | null>(null);

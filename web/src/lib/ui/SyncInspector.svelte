@@ -26,6 +26,29 @@
 
 	const fmt = (args: unknown) => JSON.stringify(args);
 
+	// Spike diagnostics (VITE_SPIKE_DIAG): what the Tauri web view supports.
+	const diag = import.meta.env.VITE_SPIKE_DIAG ? spikeDiag() : null;
+	let wake = $state('not tried');
+	if (diag) {
+		const nav = navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<unknown> } };
+		nav.wakeLock
+			? nav.wakeLock.request('screen').then(
+					() => (wake = 'granted'),
+					(e: Error) => (wake = `refused: ${e.name}: ${e.message}`)
+				)
+			: (wake = 'no navigator.wakeLock');
+	}
+	function spikeDiag() {
+		return {
+			origin: location.origin,
+			secure: String(isSecureContext),
+			randomUUID: typeof crypto.randomUUID,
+			indexedDB: typeof indexedDB,
+			serviceWorker: 'serviceWorker' in navigator ? 'yes' : 'no',
+			userAgent: navigator.userAgent
+		};
+	}
+
 	/** "Jordan Reyes · Free throws", when the change names a player or run this device knows. */
 	function about(args: unknown) {
 		const a = args as Record<string, unknown>;
@@ -41,6 +64,12 @@
 <header class="top"><div class="row"><h1>Sync</h1><StatusPill /></div></header>
 
 <main class="inspector">
+	{#if diag}
+		<dl class="kv" id="spike-diag">
+			{#each Object.entries(diag) as [k, v] (k)}<dt>{k}</dt><dd>{v}</dd>{/each}
+			<dt>wake lock</dt><dd>{wake}</dd>
+		</dl>
+	{/if}
 	<label class="switch">
 		Simulate offline
 		<input type="checkbox" checked={s.offline} onchange={(e) => engine.setOffline(e.currentTarget.checked)} />
@@ -70,6 +99,7 @@
 					: 'Unknown'}
 		</dd>
 	</dl>
+
 
 	<div class="toolbar">
 		<button class="secondary" disabled={s.offline || pulling} onclick={pullNow}>{pulling ? 'Syncing…' : 'Pull now'}</button>
