@@ -41,18 +41,21 @@ type Mutator<N extends MutationName> = (state: State, args: MutationArgs[N]) => 
 const mutators: { [N in MutationName]: Mutator<N> } = {
 	'program.put': (state, args) => {
 		const id = uuid(args.id);
-		const name = checkName(args.name);
-		if (!SPORTS.includes(args.sport)) fail('Sport must be basketball');
+		const m = merged(state.programs.get(id), args);
+		const name = checkName(m.name);
+		if (m.sport === undefined || m.sport === null) fail("Sport can't be blank");
+		if (!SPORTS.includes(m.sport!)) fail('Sport must be basketball');
 
-		const program: Program = { id, name, sport: args.sport };
+		const program: Program = { id, name, sport: m.sport! };
 		return { ...state, programs: put(state.programs, id, program) };
 	},
 
 	'season.put': (state, args) => {
 		const id = uuid(args.id);
-		const name = checkName(args.name);
-		const starts = checkDate(args.starts_on, 'Starts on');
-		const ends = checkDate(args.ends_on, 'Ends on');
+		const m = merged(state.seasons.get(id), args);
+		const name = checkName(m.name);
+		const starts = checkDate(m.starts_on, 'Starts on');
+		const ends = checkDate(m.ends_on, 'Ends on');
 		if (ends < starts) fail('Ends on must be on or after the start date');
 
 		for (const other of state.seasons.values()) {
@@ -67,9 +70,11 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 
 	'team.put': (state, args) => {
 		const id = uuid(args.id);
-		const program = liveProgram(state, args.program_id);
-		const name = checkName(args.name);
-		unchangedProgram(state.teams.get(id), program, 'team');
+		const existing = state.teams.get(id);
+		const m = merged(existing, args);
+		const program = liveProgram(state, m.program_id);
+		const name = checkName(m.name);
+		unchangedProgram(existing, program, 'team');
 
 		const team: Team = { id, program_id: program.id, name };
 		return { ...state, teams: put(state.teams, id, team) };
@@ -77,9 +82,11 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 
 	'player.put': (state, args) => {
 		const id = uuid(args.id);
-		const program = liveProgram(state, args.program_id);
-		const name = checkName(args.name);
-		unchangedProgram(state.players.get(id), program, 'player');
+		const existing = state.players.get(id);
+		const m = merged(existing, args);
+		const program = liveProgram(state, m.program_id);
+		const name = checkName(m.name);
+		unchangedProgram(existing, program, 'player');
 
 		const player: Player = { id, program_id: program.id, name };
 		return { ...state, players: put(state.players, id, player) };
@@ -88,18 +95,17 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	'roster.put': (state, args) => {
 		const id = uuid(args.id);
 		const existing = state.roster_entries.get(id);
+		const m = merged(existing, args);
 		if (
 			existing &&
-			(existing.team_id !== args.team_id ||
-				existing.season_id !== args.season_id ||
-				existing.player_id !== args.player_id)
+			(existing.team_id !== m.team_id || existing.season_id !== m.season_id || existing.player_id !== m.player_id)
 		) {
 			fail("A roster entry can't move. Remove it and add a new one.");
 		}
 
-		const team = state.teams.get(args.team_id) ?? fail('That team no longer exists.');
-		const season = state.seasons.get(args.season_id) ?? fail('That season no longer exists.');
-		const player = state.players.get(args.player_id) ?? fail('That player no longer exists.');
+		const team = state.teams.get(m.team_id!) ?? fail('That team no longer exists.');
+		const season = state.seasons.get(m.season_id!) ?? fail('That season no longer exists.');
+		const player = state.players.get(m.player_id!) ?? fail('That player no longer exists.');
 		if (player.program_id !== team.program_id) fail('That player is in a different program.');
 
 		for (const other of state.roster_entries.values()) {
@@ -108,7 +114,7 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 			}
 		}
 
-		const jersey = args.jersey ?? '';
+		const jersey = m.jersey ?? '';
 		if (jersey.length > 10) fail('Jersey should be at most 10 character(s)');
 
 		const entry: RosterEntry = { id, team_id: team.id, season_id: season.id, player_id: player.id, jersey };
@@ -125,22 +131,23 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 
 	'drill.put': (state, args) => {
 		const id = uuid(args.id);
-		const program = liveProgram(state, args.program_id);
-		const name = checkName(args.name);
-		if (!KINDS.includes(args.kind)) fail('Kind must be makes, count or time');
-
 		const existing = state.drills.get(id);
-		if (existing && existing.kind !== args.kind) fail("Kind can't change after the drill is created");
+		const m = merged(existing, args);
+		const program = liveProgram(state, m.program_id);
+		const name = checkName(m.name);
+		if (m.kind === undefined || m.kind === null) fail("Kind can't be blank");
+		if (!KINDS.includes(m.kind!)) fail('Kind must be makes, count or time');
+		if (existing && existing.kind !== m.kind) fail("Kind can't change after the drill is created");
 		unchangedProgram(existing, program, 'drill');
-		positiveOrNull(args.default_setup, 'Default setup');
+		positiveOrNull(m.default_setup, 'Default setup');
 
 		const drill: Drill = {
 			id,
 			program_id: program.id,
 			name,
-			kind: args.kind,
-			default_setup: args.default_setup ?? null,
-			archived: args.archived ?? false
+			kind: m.kind!,
+			default_setup: m.default_setup ?? null,
+			archived: m.archived ?? false
 		};
 		return { ...state, drills: put(state.drills, id, drill) };
 	},
@@ -275,7 +282,20 @@ function uuid(id: string): string {
 	return id;
 }
 
-function checkName(raw: string | undefined): string {
+/**
+ * A row as a put leaves it: the stored row (if any) with the sent fields
+ * written over it. A field sent as null becomes null; a field left out keeps
+ * its stored value. Matches sent_or_stored and cast on the server.
+ */
+type Loose<T> = { [K in keyof T]?: T[K] | null };
+
+function merged<T extends object>(existing: T | undefined, args: Loose<T>): Loose<T> {
+	const out: Loose<T> = { ...existing };
+	for (const [k, v] of Object.entries(args)) if (v !== undefined) out[k as keyof T] = v as T[keyof T] | null;
+	return out;
+}
+
+function checkName(raw: string | null | undefined): string {
 	const name = (raw ?? '').trim();
 	if (!name) fail("Name can't be blank");
 	if (name.length > 100) fail('Name should be at most 100 character(s)');
@@ -301,8 +321,8 @@ export function seasonOf(state: State, date: string): Season | undefined {
 	return undefined;
 }
 
-function liveProgram(state: State, id: string): Program {
-	return state.programs.get(id) ?? fail('That program no longer exists.');
+function liveProgram(state: State, id: string | null | undefined): Program {
+	return (id && state.programs.get(id)) || fail('That program no longer exists.');
 }
 
 function unchangedProgram(existing: { program_id: string } | undefined, program: Program, what: string) {

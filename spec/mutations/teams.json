@@ -111,6 +111,27 @@
       "expect": {
         "rejected": "Program can't change after the team is created"
       }
+    },
+    {
+      "name": "an update can send just the name",
+      "mutation": {
+        "name": "team.put",
+        "args": {
+          "id": "e1111111-1111-4111-8111-111111111111",
+          "name": "Varsity A"
+        }
+      },
+      "expect": {
+        "rows": {
+          "teams": [
+            {
+              "id": "e1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Varsity A"
+            }
+          ]
+        }
+      }
     }
   ]
 }
