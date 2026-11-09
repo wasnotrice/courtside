@@ -233,7 +233,7 @@ defmodule Courtside.Sync.Mutators do
     with {:ok, program} <- fetch_program(args, ctx),
          {:ok, drill} <- fetch_live(Drill, args["drill_id"], ctx, "That drill no longer exists."),
          :ok <- same_program(drill, program, "That drill is in a different program."),
-         :ok <- check_new_id(DrillRun, args["id"]) do
+         :ok <- check_new_id(DrillRun, args["id"], ctx) do
       cs =
         %DrillRun{id: args["id"], organization_id: ctx.organization_id}
         |> cast(args, [:program_id, :date, :drill_id, :setup])
@@ -409,8 +409,9 @@ defmodule Courtside.Sync.Mutators do
   defp fetch_program(args, ctx),
     do: fetch_live(Program, args["program_id"], ctx, "That program no longer exists.")
 
-  # A live row in the push's organization, or {:error, message}. A row in
-  # another organization is treated as missing.
+  # A live row in the push's organization, or {:error, message}. Rows in other
+  # organizations are invisible: referring to one gets the same message as
+  # referring to a row that doesn't exist.
   defp fetch_live(schema, id, ctx, message) do
     org = ctx.organization_id
 
@@ -422,21 +423,32 @@ defmodule Courtside.Sync.Mutators do
     end
   end
 
-  # The row a *.put mutation updates, or nil to create one. An id that belongs
-  # to another organization is refused. An id that isn't a UUID crashes in
-  # Repo.get, which Sync turns into a rejection.
+  # Ids are unique across the whole database, so a row can't be created with an
+  # id another organization holds. That's refused with the generic message, as
+  # for a crash, so it reveals nothing about the other organization. It only
+  # happens if a UUID is reused.
+  @foreign_id "The server could not apply this change."
+
+  # The row a *.put mutation updates, or nil to create one. An id that isn't a
+  # UUID crashes in Repo.get, which Sync turns into a rejection.
   defp load_for_put(schema, id, ctx) do
     org = ctx.organization_id
 
     case Repo.get(schema, id) do
       nil -> {:ok, nil}
       %{organization_id: ^org} = row -> {:ok, row}
-      _ -> {:error, "Id already exists"}
+      _ -> {:error, @foreign_id}
     end
   end
 
-  defp check_new_id(schema, id) do
-    if Repo.get(schema, id), do: {:error, "Id already exists"}, else: :ok
+  defp check_new_id(schema, id, ctx) do
+    org = ctx.organization_id
+
+    case Repo.get(schema, id) do
+      nil -> :ok
+      %{organization_id: ^org} -> {:error, "Id already exists"}
+      _ -> {:error, @foreign_id}
+    end
   end
 
   defp same_program(%{program_id: a}, %Program{id: b}, message), do: same(a, b, message)

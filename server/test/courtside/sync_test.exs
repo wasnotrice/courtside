@@ -144,15 +144,16 @@ defmodule Courtside.SyncTest do
       assert [%{name: "Bea"}] = pull!(other.org, "observer-b").changes.players
     end
 
-    test "a row in another organization is treated as missing", %{org: org} do
+    test "rows in another organization are invisible", %{org: org} do
       other = org!("Other High")
       ids = seed!(other, "client-b")
 
       assert %{rejections: [%{reason: "That drill was removed from the practice."}]} =
                push!(org.org, @client, [{"run.set_setup", %{id: ids.run, setup: 40}}])
 
-      # Writing to its id is refused rather than taking the row over.
-      assert %{rejections: [%{reason: "Id already exists"}]} =
+      # Creating a row with its id is refused, without saying the id is taken,
+      # rather than taking the row over.
+      assert %{rejections: [%{reason: "The server could not apply this change."}]} =
                push!(
                  org.org,
                  @client,
