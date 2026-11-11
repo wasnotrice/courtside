@@ -6,6 +6,7 @@
 	import GameSheet from './GameSheet.svelte';
 	import { gamesOf, matchup, mismatchText, rulesName, scoresByGame } from './games';
 	import ScopeBar from './ScopeBar.svelte';
+	import SeasonView from './SeasonView.svelte';
 	import StatusPill from './StatusPill.svelte';
 	import Tabs from './Tabs.svelte';
 
@@ -35,9 +36,20 @@
 <header class="top">
 	<div class="row"><h1>Games</h1><StatusPill /></div>
 	<ScopeBar season />
+	<div class="seg two" role="tablist" aria-label="Games or season">
+		<button role="tab" aria-selected={app.gamesPane === 'games'} class:on={app.gamesPane === 'games'} onclick={() => (app.gamesPane = 'games')}>
+			Games
+		</button>
+		<button role="tab" aria-selected={app.gamesPane === 'season'} class:on={app.gamesPane === 'season'} onclick={() => (app.gamesPane = 'season')}>
+			Season
+		</button>
+	</div>
 </header>
 
 <main>
+	{#if app.gamesPane === 'season'}
+		<SeasonView />
+	{:else}
 	{#each rejections as r (r.mutation_id)}
 		<div class="reject standalone" role="alert">
 			<span>Not saved ({aboutGame(r.args as Record<string, unknown>)}): {r.reason}</span>
@@ -86,6 +98,7 @@
 	{/if}
 
 	<button class="primary wide" onclick={() => (creating = true)}>+ New game</button>
+	{/if}
 </main>
 <Tabs />
 
@@ -94,6 +107,12 @@
 {/if}
 
 <style>
+	.seg.two {
+		grid-template-columns: 1fr 1fr;
+	}
+	.seg.two button {
+		padding: 6px 4px;
+	}
 	.cflag {
 		grid-column: 1 / -1;
 		color: var(--warn);

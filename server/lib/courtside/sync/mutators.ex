@@ -56,7 +56,7 @@ defmodule Courtside.Sync.Mutators do
     "player.put" => ~w(id program_id name),
     "roster.put" => ~w(id team_id season_id player_id jersey),
     "roster.remove" => ~w(id),
-    "drill.put" => ~w(id program_id name kind default_setup archived),
+    "drill.put" => ~w(id program_id name kind default_setup archived game_stat),
     "run.create" => ~w(id program_id date drill_id setup),
     "run.set_setup" => ~w(id setup),
     "run.delete" => ~w(id),
@@ -275,16 +275,25 @@ defmodule Courtside.Sync.Mutators do
     with {:ok, existing} <- load_for_put(Drill, args["id"], ctx),
          {:ok, _program} <- fetch_program(args, existing, ctx) do
       (existing || %Drill{id: args["id"], organization_id: ctx.organization_id})
-      |> cast(args, [:program_id, :name, :kind, :default_setup, :archived])
+      |> cast(args, [:program_id, :name, :kind, :default_setup, :archived, :game_stat])
       |> trim_name()
       |> validate_required([:name, :kind])
       |> validate_inclusion(:kind, Drill.kinds(), message: "must be makes, count or time")
       |> validate_unchanged(:kind, existing, "can't change after the drill is created")
       |> validate_unchanged(:program_id, existing, "can't change after the drill is created")
       |> validate_setup(:default_setup)
+      |> validate_inclusion(:game_stat, Drill.game_stats(), message: "must be ft, fg2 or fg3")
+      |> validate_game_stat_kind()
       |> check_constraint(:kind, name: :kind_valid)
+      |> check_constraint(:game_stat, name: :game_stat_valid)
       |> save(ctx)
     end
+  end
+
+  defp validate_game_stat_kind(cs) do
+    if get_field(cs, :game_stat) && get_field(cs, :kind) != "makes",
+      do: add_error(cs, :game_stat, "", problem: "Only a makes drill can match a game stat"),
+      else: cs
   end
 
   defp create_run(args, ctx) do

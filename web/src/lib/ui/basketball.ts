@@ -162,7 +162,7 @@ export interface Line {
 	fd: number;
 }
 
-const emptyLine = (): Line => ({
+export const emptyLine = (): Line => ({
 	pts: 0,
 	fgm: 0,
 	fga: 0,

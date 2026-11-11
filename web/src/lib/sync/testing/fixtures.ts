@@ -44,7 +44,7 @@ export const player = (over: Partial<Player> = {}): Of<'player.put'> => ({
 
 export const drill = (over: Partial<Drill> = {}): Of<'drill.put'> => ({
 	name: 'drill.put',
-	args: { id: id(), program_id: PROGRAM, name: 'Free throws', kind: 'makes', default_setup: 50, archived: false, ...over }
+	args: { id: id(), program_id: PROGRAM, name: 'Free throws', kind: 'makes', default_setup: 50, archived: false, game_stat: null, ...over }
 });
 
 export const run = (drillId: string, over: Partial<Run> = {}): Of<'run.create'> => ({

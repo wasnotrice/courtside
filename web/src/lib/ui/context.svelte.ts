@@ -36,6 +36,8 @@ export class AppState {
 	gameId = $state<string | null>(null);
 	/** Which of the game's screens is open: recording, the play-by-play, or the box score. */
 	gameMode = $state<GameMode>('live');
+	/** The Games tab's list of games, or the season's totals. */
+	gamesPane = $state<'games' | 'season'>('games');
 	historyDrill = $state<string | null>(null);
 	toast = $state('');
 	private programId = $state(remembered('program'));

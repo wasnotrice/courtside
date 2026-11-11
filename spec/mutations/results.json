@@ -44,7 +44,8 @@
         "name": "Free throws",
         "kind": "makes",
         "default_setup": 50,
-        "archived": false
+        "archived": false,
+        "game_stat": null
       },
       {
         "id": "d2222222-2222-4222-8222-222222222222",
@@ -52,7 +53,8 @@
         "name": "Suicides",
         "kind": "time",
         "default_setup": 3,
-        "archived": false
+        "archived": false,
+        "game_stat": null
       }
     ],
     "runs": [

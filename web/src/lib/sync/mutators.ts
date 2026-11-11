@@ -10,6 +10,7 @@
 
 import { DEFAULT_RULES, FOUL_TYPES, MADE_FIELD_GOALS, periodSeconds, rulesProblem, STATS } from './basketball';
 import {
+	GAME_STATS,
 	KINDS,
 	SPORTS,
 	resultKey,
@@ -144,6 +145,9 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 		if (existing && existing.kind !== m.kind) fail("Kind can't change after the drill is created");
 		unchangedProgram(existing, program, 'drill');
 		positiveOrNull(m.default_setup, 'Default setup');
+		const gameStat = m.game_stat ?? null;
+		if (gameStat !== null && !GAME_STATS.includes(gameStat)) fail('Game stat must be ft, fg2 or fg3');
+		if (gameStat !== null && m.kind !== 'makes') fail('Only a makes drill can match a game stat');
 
 		const drill: Drill = {
 			id,
@@ -151,7 +155,8 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 			name,
 			kind: m.kind!,
 			default_setup: m.default_setup ?? null,
-			archived: m.archived ?? false
+			archived: m.archived ?? false,
+			game_stat: gameStat
 		};
 		return { ...state, drills: put(state.drills, id, drill) };
 	},
@@ -384,7 +389,7 @@ const FIELDS: { [N in MutationName]: readonly (keyof MutationArgs[N])[] } = {
 	'player.put': ['id', 'program_id', 'name'],
 	'roster.put': ['id', 'team_id', 'season_id', 'player_id', 'jersey'],
 	'roster.remove': ['id'],
-	'drill.put': ['id', 'program_id', 'name', 'kind', 'default_setup', 'archived'],
+	'drill.put': ['id', 'program_id', 'name', 'kind', 'default_setup', 'archived', 'game_stat'],
 	'run.create': ['id', 'program_id', 'date', 'drill_id', 'setup'],
 	'run.set_setup': ['id', 'setup'],
 	'run.delete': ['id'],

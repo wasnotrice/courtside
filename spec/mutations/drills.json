@@ -19,7 +19,8 @@
         "name": "Free throws",
         "kind": "makes",
         "default_setup": 50,
-        "archived": false
+        "archived": false,
+        "game_stat": null
       }
     ]
   },
@@ -34,7 +35,8 @@
           "name": "Suicides",
           "kind": "time",
           "default_setup": 3,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -46,7 +48,8 @@
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             },
             {
               "id": "d2222222-2222-4222-8222-222222222222",
@@ -54,7 +57,8 @@
               "name": "Suicides",
               "kind": "time",
               "default_setup": 3,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             }
           ]
         }
@@ -70,7 +74,8 @@
           "name": "Push-ups",
           "kind": "count",
           "default_setup": null,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -82,7 +87,8 @@
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             },
             {
               "id": "d3333333-3333-4333-8333-333333333333",
@@ -90,7 +96,8 @@
               "name": "Push-ups",
               "kind": "count",
               "default_setup": null,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             }
           ]
         }
@@ -106,7 +113,8 @@
           "name": " Push-ups ",
           "kind": "count",
           "default_setup": null,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -118,7 +126,8 @@
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             },
             {
               "id": "d3333333-3333-4333-8333-333333333333",
@@ -126,7 +135,8 @@
               "name": "Push-ups",
               "kind": "count",
               "default_setup": null,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             }
           ]
         }
@@ -142,7 +152,8 @@
           "name": "",
           "kind": "count",
           "default_setup": null,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -159,7 +170,8 @@
           "name": "Push-ups",
           "kind": "count",
           "default_setup": null,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -176,7 +188,8 @@
           "name": "Push-ups",
           "kind": "streak",
           "default_setup": null,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -193,7 +206,8 @@
           "name": "Free throws",
           "kind": "count",
           "default_setup": 50,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -210,7 +224,8 @@
           "name": "Free throws",
           "kind": "makes",
           "default_setup": 50,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -227,7 +242,8 @@
           "name": "Push-ups",
           "kind": "count",
           "default_setup": 0,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -244,7 +260,8 @@
           "name": "Push-ups",
           "kind": "count",
           "default_setup": "ten",
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -261,7 +278,8 @@
           "name": "Free throws",
           "kind": "makes",
           "default_setup": 50,
-          "archived": true
+          "archived": true,
+          "game_stat": null
         }
       },
       "expect": {
@@ -273,7 +291,8 @@
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
-              "archived": true
+              "archived": true,
+              "game_stat": null
             }
           ]
         }
@@ -289,7 +308,8 @@
             "name": "Push-ups",
             "kind": "count",
             "default_setup": null,
-            "archived": true
+            "archived": true,
+            "game_stat": null
           }
         ]
       },
@@ -312,7 +332,8 @@
               "name": "Free throws",
               "kind": "makes",
               "default_setup": 50,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             },
             {
               "id": "d3333333-3333-4333-8333-333333333333",
@@ -320,7 +341,8 @@
               "name": "Push-ups",
               "kind": "count",
               "default_setup": null,
-              "archived": true
+              "archived": true,
+              "game_stat": null
             }
           ]
         }
@@ -336,7 +358,8 @@
           "name": "",
           "kind": "streak",
           "default_setup": null,
-          "archived": false
+          "archived": false,
+          "game_stat": null
         }
       },
       "expect": {
@@ -362,7 +385,8 @@
               "name": "FTs",
               "kind": "makes",
               "default_setup": 50,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             }
           ]
         }
@@ -386,7 +410,8 @@
               "name": "Free throws",
               "kind": "makes",
               "default_setup": null,
-              "archived": false
+              "archived": false,
+              "game_stat": null
             }
           ]
         }
@@ -418,6 +443,62 @@
       },
       "expect": {
         "rejected": "That program no longer exists."
+      }
+    },
+    {
+      "name": "links a makes drill to a game stat",
+      "mutation": {
+        "name": "drill.put",
+        "args": {
+          "id": "d1111111-1111-4111-8111-111111111111",
+          "game_stat": "ft"
+        }
+      },
+      "expect": {
+        "rows": {
+          "drills": [
+            {
+              "id": "d1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Free throws",
+              "kind": "makes",
+              "default_setup": 50,
+              "archived": false,
+              "game_stat": "ft"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an unknown game stat is refused",
+      "mutation": {
+        "name": "drill.put",
+        "args": {
+          "id": "d1111111-1111-4111-8111-111111111111",
+          "game_stat": "dunks"
+        }
+      },
+      "expect": {
+        "rejected": "Game stat must be ft, fg2 or fg3"
+      }
+    },
+    {
+      "name": "only a makes drill can match a game stat",
+      "mutation": {
+        "name": "drill.put",
+        "args": {
+          "id": "d3333333-3333-4333-8333-333333333333",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
+          "name": "Push-ups",
+          "kind": "count",
+          "default_setup": null,
+          "archived": false,
+          "game_stat": "ft"
+        }
+      },
+      "expect": {
+        "rejected": "Only a makes drill can match a game stat"
       }
     }
   ]

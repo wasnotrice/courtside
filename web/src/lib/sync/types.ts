@@ -9,6 +9,10 @@ export type { FoulType, Rules, Stat } from './basketball';
 export type Kind = 'makes' | 'count' | 'time';
 export const KINDS: readonly Kind[] = ['makes', 'count', 'time'];
 
+/** The game stat a makes drill practices: free throws, 2-point or 3-point shots. */
+export type GameStat = 'ft' | 'fg2' | 'fg3';
+export const GAME_STATS: readonly GameStat[] = ['ft', 'fg2', 'fg3'];
+
 export type Sport = 'basketball';
 export const SPORTS: readonly Sport[] = ['basketball'];
 
@@ -58,6 +62,8 @@ export interface Drill {
 	kind: Kind;
 	default_setup: number | null;
 	archived: boolean;
+	/** For a makes drill, the game stat it matches, to compare practice with games. */
+	game_stat: GameStat | null;
 }
 
 export interface Run {

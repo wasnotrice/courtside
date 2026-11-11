@@ -476,10 +476,15 @@ connection" when not.
 
 ### Season totals and comparing practice to games
 
-- Season totals for each player across a team's games, with per-game averages.
-- Practice compared with games for matching skills, starting with free throw
-  percentage: drill runs of free throw drills against `ft_made` and `ft_missed` in
-  games. A drill gets an optional "matches game stat" link to make this explicit.
+- **Games, then Season**, for one team at a time: each player's totals across the
+  season's games, or per game (counts averaged, shots as percentages). GP counts the
+  games a player has any stat in, since there's no record of minutes or who played.
+  Tapping a player lists their games; tapping a game opens its box score.
+- **Practice vs games**: a makes drill can name the game stat it practices (`game_stat`:
+  free throws, 2-point or 3-point shots), set in History's Edit drill. For each linked
+  stat, every player's makes and attempts in the season's runs of those drills, against
+  the same shots in games, and the difference in percentage points. Practice counts
+  only results with a known number of shots.
 
 ### Client and tests
 

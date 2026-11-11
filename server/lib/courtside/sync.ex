@@ -54,7 +54,7 @@ defmodule Courtside.Sync do
     {:teams, Team, [:id, :program_id, :name, :default_rules]},
     {:players, Player, [:id, :program_id, :name]},
     {:roster_entries, RosterEntry, [:id, :team_id, :season_id, :player_id, :jersey]},
-    {:drills, Drill, [:id, :program_id, :name, :kind, :default_setup, :archived]},
+    {:drills, Drill, [:id, :program_id, :name, :kind, :default_setup, :archived, :game_stat]},
     {:runs, DrillRun, [:id, :program_id, :date, :drill_id, :setup]},
     # Results are addressed by (run, player); the server's id stays internal.
     {:results, Result, [:drill_run_id, :player_id, :value, :setup]},

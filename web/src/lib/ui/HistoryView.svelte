@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Drill } from '$lib/sync/types';
+	import { GAME_STATS, type Drill, type GameStat } from '$lib/sync/types';
 	import { getApp } from './context.svelte';
 	import {
 		bestFor,
@@ -22,6 +22,7 @@
 		type RosterRow
 	} from './domain';
 	import ScopeBar from './ScopeBar.svelte';
+	import { GAME_STAT_LABEL } from './season';
 	import Sheet from './Sheet.svelte';
 	import SetupField from './SetupField.svelte';
 	import StatusPill from './StatusPill.svelte';
@@ -126,7 +127,7 @@
 		URL.revokeObjectURL(url);
 	}
 
-	let editing = $state<{ drill: Drill; name: string; setup: string; archived: boolean } | null>(null);
+	let editing = $state<{ drill: Drill; name: string; setup: string; archived: boolean; gameStat: GameStat | '' } | null>(null);
 	let err = $state('');
 
 	async function saveDrill() {
@@ -136,7 +137,8 @@
 		const res = readSetup(editing.drill.kind, editing.setup);
 		if ('err' in res) return (err = res.err);
 		// Only what changed goes out, so edits elsewhere to other fields survive.
-		const args = changedFields(editing.drill, { ...editing.drill, name, default_setup: res.v, archived: editing.archived });
+		const game_stat = editing.drill.kind === 'makes' ? editing.gameStat || null : null;
+		const args = changedFields(editing.drill, { ...editing.drill, name, default_setup: res.v, archived: editing.archived, game_stat });
 		const outcome = args ? await app.sync.engine.mutate({ name: 'drill.put', args }) : { ok: true as const };
 		if (!outcome.ok) return (err = outcome.reason);
 		editing = null;
@@ -173,7 +175,13 @@
 				class="secondary"
 				onclick={() => {
 					err = '';
-					editing = { drill, name: drill.name, setup: String(drill.default_setup ?? ''), archived: drill.archived };
+					editing = {
+						drill,
+						name: drill.name,
+						setup: String(drill.default_setup ?? ''),
+						archived: drill.archived,
+						gameStat: drill.game_stat ?? ''
+					};
 				}}>Edit drill</button
 			>
 		</div>
@@ -239,6 +247,16 @@
 			label={'Default ' + KINDS[editing.drill.kind].setupField.toLowerCase()}
 			bind:value={editing.setup}
 		/>
+		{#if editing.drill.kind === 'makes'}
+			<label class="field">
+				<span>Matches in games</span>
+				<select bind:value={editing.gameStat}>
+					<option value="">Nothing</option>
+					{#each GAME_STATS as s (s)}<option value={s}>{GAME_STAT_LABEL[s]}</option>{/each}
+				</select>
+			</label>
+			<p class="hint">Compares this drill with the same shots in games, on Games, then Season.</p>
+		{/if}
 		<label class="check"><input type="checkbox" bind:checked={editing.archived} /> Hide from Add a drill</label>
 		{#if err}<p class="err" role="alert">{err}</p>{/if}
 		<button class="primary wide" onclick={saveDrill}>Save</button>
