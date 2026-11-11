@@ -61,6 +61,11 @@ _Avoid_: Run (alone; in basketball a run is a scoring streak), session
 **Result**:
 One player's value, and optionally their own setup, in one drill run.
 
+**Matching game stat**:
+The shot a makes drill practices, as it's counted in games: free throws, 2-point or
+3-point shots. It lets practice be compared with games.
+_Avoid_: Link, mapping
+
 ## Games
 
 **Game**:
@@ -93,6 +98,28 @@ _Avoid_: Settings, config
 A game's totals for each player, for the team and for the opponent, computed from its
 plays.
 
+**Period**:
+A half, a quarter or an overtime, as the game rules say, named in full ("1st half",
+"Overtime").
+_Avoid_: H1, Q1
+
+**Game status**:
+Live while the game is played, final once it's over, reviewed once it's been checked
+against film.
+
+**Official score**:
+The final score from the scorebook, entered when the game is final. When the plays
+add up to something else, the game is flagged.
+_Avoid_: Real score
+
+**Season totals**:
+A team's box scores added up over a season, for each player, as totals or per game.
+
+**Games played**:
+The games a player has any stat in. Courtside doesn't record minutes or who checked
+in, so a player who played without a stat isn't counted.
+_Avoid_: Appearances
+
 ## Sync
 
 **Pending change**:
@@ -102,3 +129,16 @@ _Avoid_: Mutation (outside code), queued edit
 **Rejection**:
 A pending change the server refused, with the reason shown to the coach.
 _Avoid_: Error, conflict
+
+**Restore**:
+Bringing back a game or drill run that another phone deleted, with what was recorded
+into it, so changes refused because of the delete aren't lost.
+_Avoid_: Undelete, recover
+
+**Undo**:
+Taking back the latest change made on this screen, on this phone.
+
+**History**:
+Every change to one row, by any phone, kept on the server. Any edit in it can be
+reverted.
+_Avoid_: Audit log

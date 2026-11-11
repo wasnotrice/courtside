@@ -13,6 +13,9 @@ Three phases, with two spikes between the first and second:
 
 (The headings below call these phase 1, the spikes, phase 2, phase 3 and phase 4.)
 
+**Status:** phase 1, the spikes and phase 2 are done. Next is phase 3. Where what was
+built differs from the plan, the sections below say so.
+
 The terms used here are defined in [`GLOSSARY.md`](../GLOSSARY.md). The decision to
 scope data by organization is
 [ADR 0001](adr/0001-scope-sync-by-organization.md). Evidence about existing apps is in

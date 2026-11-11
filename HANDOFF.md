@@ -11,9 +11,10 @@ You're picking up a half-built project. Read this whole file before changing any
 
 ## What this is
 
-A practice stat tracker for a high school basketball team. During practice, players
-finish a drill and report a number to the coach, who enters it on a phone. Today that's
-free throws (makes out of N shots). Soon it will be any drill.
+A stat tracker for a high school basketball program. During practice, players finish a
+drill and report a number to the coach, who enters it on a phone; any drill works. In
+games, a scorer records each play live, the coach corrects the plays from film, and box
+scores and season totals come from them.
 
 The coach is a software developer. This project is **deliberately an experiment in
 offline-first design with hand-rolled sync**. Don't swap in PowerSync, ElectricSQL,
@@ -49,104 +50,57 @@ Stack: **SvelteKit** client (`web/`), **Phoenix/Elixir** API (`server/`), **Post
   makes" can't be merged, so a CRDT isn't appropriate.
 - **No auth in v1.** It's local dev, single team.
 
-## Sync protocol (see docs/sync-protocol.md for the full write-up)
+## Sync protocol
 
-This is Replicache-style push/pull using the **global version strategy**:
-
-- `server_meta` holds one row with `version`. Every push transaction first runs
-  `UPDATE server_meta SET version = version + 1 RETURNING version`, which takes the
-  row lock. That **serializes pushes**, so version order equals commit order. This
-  avoids the classic bug where a sequence number is assigned out of commit order and
-  a pull skips a row. Every row the push writes is stamped with that version.
-- Synced tables (`players`, `drills`, `drill_runs`, `results`) have `version bigint`
-  and `deleted boolean`. A delete is a tombstone, so pulls can report it.
-- **Push** `POST /api/push {client_id, mutations: [{id, name, args}]}`
-  - `id` is a per-client integer that increases with each mutation. The `clients`
-    table stores `last_mutation_id`. Mutations with `id <= last` are skipped, so
-    retries are safe.
-  - Each mutation runs inside a `SAVEPOINT`. A validation error, or an exception
-    (which is rescued and logged), rolls back to the savepoint, writes a row to
-    `mutation_rejections`, and **still advances** `last_mutation_id`, so one bad
-    mutation can't block the queue.
-  - Response: `{last_mutation_id, rejections: [{mutation_id, name, args, reason}]}`
-    for the mutations in that batch.
-  - After commit, the server broadcasts a **poke** on PubSub topic `"sync"`.
-- **Pull** `GET /api/pull?client_id=…&cursor=N`
-  - Runs in a `REPEATABLE READ READ ONLY` transaction, so it reads one consistent
-    snapshot.
-  - Returns `{cursor, last_mutation_id, rejections, changes: {players, drills, runs, results}}`,
-    with rows where `version > cursor` (tombstones included) and rejections recorded
-    after `cursor`.
-  - Results are keyed on the wire by `(drill_run_id, player_id)`. The server's
-    `results.id` isn't sent.
-- **Poke channel:** Phoenix socket at `/socket`, channel `"sync"`, event `"poke"`
-  with an empty payload. When a client gets a poke, it pulls. A missed poke only
-  delays a client until its next periodic pull.
-
-Mutation names and args (see `server/lib/courtside/sync/mutators.ex`):
-
-| name               | args                                         | notes |
-|--------------------|----------------------------------------------|-------|
-| `player.put`       | `id, name, jersey, active`                   | upsert |
-| `drill.put`        | `id, name, kind, default_setup, archived`    | upsert; `kind` can't change after the drill is created |
-| `run.create`       | `id, date (YYYY-MM-DD), drill_id, setup`     | setup required for makes |
-| `run.set_setup`    | `id, setup`                                  | rejected if any player without an override has makes > setup |
-| `run.delete`       | `id`                                         | tombstones the run and its results |
-| `result.set_value` | `drill_run_id, player_id, value`             | per-kind validation; makes ≤ effective setup |
-| `result.set_setup` | `drill_run_id, player_id, setup` (null resets) | per-player override |
-| `result.clear`     | `drill_run_id, player_id`                    | tombstone |
-
-A result row can exist with `value: null` and a `setup` override. That means "no result
-yet, but this player's setup is different."
+[`docs/sync-protocol.md`](docs/sync-protocol.md) is the full and current write-up:
+Replicache-style push and pull, one version counter per organization taken under a
+row lock, tombstones, rejections through pull, every change (mutation) and its
+arguments, restoring deleted games and runs, and the change log behind history. The
+rules for each change are in `server/lib/courtside/sync/mutators.ex` and
+`web/src/lib/sync/mutators.ts`, kept in step by the shared cases in `spec/mutations/`.
 
 ## Current state
 
-Steps 1 to 4 of the original plan are done, and step 5 is mostly done. See `README.md`
-for how to run it and `docs/sync-protocol.md` for the protocol.
+**Phases 1 and 2 of [`docs/games-plan.md`](docs/games-plan.md) are done**, along with
+both spikes (`docs/research/`). Phase 1 organized the data by organization, program,
+team and season. Phase 2 added games, with one commit per step:
 
-- **Server tests** (`server/test/courtside/sync_test.exs`, `sync_concurrency_test.exs`,
-  `courtside_web/controllers/sync_controller_test.exs`). They found and fixed these bugs:
-  `results` and `mutation_rejections` had integer ids (every write crashed); a blank
-  jersey crashed `player.put`; `result.set_setup` didn't revive a cleared result; a NUL
-  byte in args made the rejection unstorable, which wedged the client's queue.
-- **Client sync layer** (`web/src/lib/sync/`): mutators, replay, Dexie and memory stores,
-  HTTP and Phoenix poke transport, and the engine. The UI talks only to `engine.ts` (via
-  `index.svelte.ts`).
-- **UI** (`web/src/lib/ui/`): a port of the prototype, plus the Sync inspector tab.
-  Driven end to end with Playwright against the real server: two devices, pokes, the
-  offline switch, and a run deleted under another device's offline result.
-- **Edge cases**: all three are Vitest tests with two simulated clients against
-  `testing/fake-server.ts`, which follows the same protocol but uses the TypeScript rules.
+- Games and plays on the server and the phone, with the rules in both (`basketball.ex`,
+  `sync/basketball.ts`) and team rules presets, Minnesota (MSHSL) included.
+- The Games tab: the game list, a new game sheet, and rules chosen per team.
+- The live screen: player then stat, the same 12-key pad for us and them, follow-up
+  questions (assist, rebound, foul type, fouled player, steal and turnover pairs, block
+  and miss pairs), team fouls and the bonus, and foul trouble.
+- Review: the play-by-play with edits from film, the box score (tap a number for its
+  plays), game status, the official score and the mismatch flag.
+- Season totals per team, and practice vs games for drills linked to a game stat.
+- Restoring a game or drill run another phone deleted, with the changes refused
+  because of it.
+- Undo on the live and practice entry screens, and history with revert on plays,
+  games and players.
+- End-to-end tests (`web/e2e/`, `npm run test:e2e`) against the dev servers.
 
-Decisions made along the way:
-- Rejections reach the client only through pull, not push responses. Once the cursor
-  passes a rejection it never comes back, so a dismissed one stays dismissed.
-- A failed push still pulls.
-- Pull's `SET TRANSACTION` is behind `config :courtside, :snapshot_pulls` (off in
-  test.exs, because the SQL sandbox already wraps each test in a transaction).
-- Runs have no creation time, so the Practice list sorts by drill name.
-- Clearing a value with a per-player setup sends `result.clear` and then
-  `result.set_setup`, because there's no "clear value only" mutation.
+Tests: `mix test` (server), `npm test` (web: mutators, replay, stores, the engine with
+simulated phones, UI helpers), `npm run check` (types), `npm run test:e2e`.
 
 ## Next steps
 
-The plan is [`docs/games-plan.md`](docs/games-plan.md). **Phase 1 is done**
-(organizations, programs, teams, seasons and rosters; edits that send only their
-changed fields; offline safety; sync hardening; shared mutation cases). Next are
-the two spikes (Tauri on iOS, LiveStore for games), then phase 2 (games).
-
-Phase 1 changed the step boundaries a little: the client mutators moved with the
-server's in step 1, so the shared cases in `spec/mutations/` pass on both sides at
-every commit.
+Phase 3 (the Tauri mobile app) and phase 4 (sign-in) in `docs/games-plan.md`. Sign-in
+must ship before any server is reachable from outside the tailnet.
 
 Known follow-ups, not urgent:
 - Several tabs open on one device: share state through a `BroadcastChannel` or a lock.
 - Cleaning up old tombstones.
-- "Last edited by" is covered by the change log in phase 2 (see the plan's "Undo and
-  history").
+- Deleting a student's data must also blank them in the change log, before Courtside
+  becomes a product.
+- History covers plays, games and players; drill runs and results could use it too.
+- Undo is on the live and practice entry screens only.
+- Games played counts games with any stat, since minutes aren't recorded.
+- Practice vs games shows the difference even on a handful of game attempts.
 - The season picker is an unstyled native `<select>`.
 - On the entry screen with a team filter, the summary line still covers the whole
   drill run.
+- `web/src-tauri/` is untracked build output from the Tauri spike.
 
 ## How to run
 

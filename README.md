@@ -1,8 +1,10 @@
 # Courtside
 
-A practice stat tracker for a high school basketball program. Players finish a
-drill and call out a number; the coach enters it on a phone. It works with no
-signal and syncs when there is one. Data is organized by school
+A stat tracker for a high school basketball program, for practices and games. At
+practice, players finish a drill and call out a number, and the coach enters it on a
+phone. At a game, a scorer records each play as it happens (player, then stat), and
+the coach corrects it from film afterward; box scores and season totals come from the
+plays. It works with no signal and syncs when there is one. Data is organized by school
 (organization), program (girls' or boys' basketball), team (varsity, JV) and
 season; [GLOSSARY.md](GLOSSARY.md) defines the terms.
 
@@ -86,7 +88,14 @@ example `PGPORT=5432 mix phx.server`. The username and password are
 cd server && mix test       # protocol, rules, JSON endpoints, channels, concurrent pushes
 cd web && npm test          # client mutators, replay, stores, sync engine, UI helpers
 cd web && npm run check     # types
+cd web && npm run test:e2e  # end to end, in real browsers (needs both dev servers running)
 ```
+
+The end-to-end tests (`web/e2e/`) drive phone-sized browsers against the dev servers:
+live entry going offline and back, a film correction reaching another phone, and
+restoring a game another phone deleted. They write to the dev database and delete the
+games they make (all named "E2E …"). The first time, run `npx playwright install
+chromium`, or set `PLAYWRIGHT_CHANNEL=chrome` to use the installed Chrome.
 
 `mix test` includes a concurrency test that runs real transactions outside the
 SQL sandbox, against the test database.
@@ -117,6 +126,14 @@ its client id, cursor, pending changes and rejections. It also has a
   stays visible until you dismiss it.
 - Enter 40 makes, then lower the run's shots to 30 on another device. The
   change that reaches the server second is rejected.
+- Start a game on one window and record a few plays. Turn it offline and record
+  more. On the other window, delete the game. Turn the first back on: Games shows
+  "A game was deleted on another phone", and **Restore the game** brings it back
+  with every play.
+- Open the same game's Plays screen in both windows. Change a play's period or
+  film time in one; the other updates without a reload.
+- On the live screen, record a play, then tap **Undo**. In Plays, edit a play, then
+  open its **History** and revert the edit.
 
 ## Layout
 
@@ -127,5 +144,10 @@ server/lib/courtside/schema/           one Ecto schema per table
 spec/mutations/                        rule cases both test suites run
 web/src/lib/sync/                      the client sync layer; the UI only talks to engine.ts
 web/src/lib/sync/mutators.ts           the same rules in TypeScript, for instant feedback
+web/src/lib/sync/undo.ts               the reverse of each change, for Undo
+web/src/lib/sync/restore.ts            bringing back a deleted game or drill run
 web/src/lib/ui/                        Svelte components, ported from docs/prototype.html
+web/src/lib/ui/basketball.ts           box scores, fouls and the bonus, rules presets
+web/e2e/                               Playwright tests against the dev servers
+docs/games-plan.md                     the plan for games, and what was built
 ```

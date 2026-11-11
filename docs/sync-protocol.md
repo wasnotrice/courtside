@@ -43,17 +43,23 @@ The app makes these changes. Each one has a name and arguments:
 |---|---|---|
 | `program.put` | id, name, sport | One sport for one gender, such as girls' basketball. The sport can't change. |
 | `season.put` | id, name, starts_on, ends_on | A school year. Seasons in an organization can't overlap. |
-| `team.put` | id, program_id, name | Varsity, JV. A team can't move to another program. |
+| `team.put` | id, program_id, name, default_rules | Varsity, JV. A team can't move to another program. `default_rules` are copied into each new game. |
 | `player.put` | id, program_id, name | A player can't move to another program. |
 | `roster.put` | id, team_id, season_id, player_id, jersey | Puts a player on a team for a season. Once per team and season; an entry can't move. |
 | `roster.remove` | id | Takes a player off a team for that season. |
-| `drill.put` | id, program_id, name, kind, default_setup, archived | A drill's kind can't change after it's created. |
+| `drill.put` | id, program_id, name, kind, default_setup, archived, game_stat | A drill's kind can't change after it's created. `game_stat` (`ft`, `fg2`, `fg3`) is the game shot a makes drill practices. |
 | `run.create` | id, program_id, date, drill_id, setup | Starts a drill at a practice. The date must fall in a season. Makes drills need a number of shots. |
 | `run.set_setup` | id, setup | Refused if it would leave someone with more makes than shots. |
 | `run.delete` | id | Removes the run and its results. |
+| `run.restore` | id | Brings back a deleted run and the results deleted with it. See "Restoring". |
 | `result.set_value` | drill_run_id, player_id, value | Checked per kind. Makes can't exceed shots. |
 | `result.set_setup` | drill_run_id, player_id, setup | One player's own setup. `null` goes back to the run's. |
 | `result.clear` | drill_run_id, player_id | Removes the result. |
+| `game.put` | id, team_id, date, opponent, home_away, status, rules, official_us, official_them | The date must fall in a season. A new game copies its team's rules unless it sends its own. Refused for a deleted game. |
+| `game.delete` | id | Removes the game and its plays. |
+| `game.restore` | id | Brings back a deleted game and the plays deleted with it. See "Restoring". |
+| `play.put` | id, game_id, side, player_id, stat, foul_type, assist_player_id, drawn_by_player_id, period, clock, video_at, position, recorded_at | One stat in a game. Only our plays name a player; assists go with our made field goals, fouls drawn with their fouls. Plays sort by `position`. |
+| `play.delete` | id | Removes the play. A deleted play can't come back under its id. |
 
 **A `*.put` changes only the fields it sends.** When the id is new it creates
 the row, and then needs the required fields. Otherwise a field sent as `null` is
@@ -138,6 +144,35 @@ from the queue and stores new rejections. Then it recomputes the view.
 `deleted = true` and a new version. Otherwise a pull couldn't tell a phone that
 a row it has is gone.
 
+## Restoring
+
+When one phone deletes a game or a drill run, another phone's offline changes into
+it are refused when they arrive ("That game was deleted."). Deletes are tombstones,
+so the app offers to bring the row back: `game.restore` or `run.restore` revives it,
+along with the plays or results deleted with it (those stamped with the delete's
+version; ones deleted on their own before stay deleted). The phone then queues the
+refused changes again as new ones.
+
+The phone never sees deleted rows, so it can't apply a restore itself: its
+`*.restore` mutators change nothing, and the row comes back with the next pull.
+Restoring therefore needs a connection.
+
+## History
+
+Every push also writes the server's `change_log`, in the same transaction: for
+each change, the client, mutation id, name and arguments, whether it was accepted
+(and why not), and for accepted changes each changed field's value before and after.
+
+`GET /api/history?organization_id=…&table=…&key=…` returns one row's entries,
+newest first, with `table` and `key` as pull names the row (`plays` and its id;
+`results` and `<run id>/<player id>`). Phones fetch it on demand, never through
+sync, so they don't carry a growing log. Reverting an entry sends its before values
+as an ordinary change.
+
+**Undo** doesn't use the log. Just before each change on the live and practice entry
+screens, the phone works out the changes that would put things back
+(`web/src/lib/sync/undo.ts`) and keeps them in memory; Undo sends them.
+
 ## Why one version per organization, and why the lock matters
 
 Each pull asks for "everything above my cursor", so the versions must never
@@ -212,7 +247,9 @@ A new version of the app can change the IndexedDB schema. An upgrade may throw
 away the base, since the next pull brings it back, but never the queue. **Adding a
 synced table must throw the base away too**: rows the server already has in that
 table sit below the phone's cursor, so a phone that kept its cursor would never pull
-them. Version 3 (games and plays) does this.
+them. Version 3 (games and plays) does this. A new field on an existing table
+doesn't need it when the app treats a missing value as `null` (as with a drill's
+`game_stat`): the rows get the field the next time they change.
 `store.test.ts` upgrades a real version 1 database with pending changes and
 checks they survive.
 
