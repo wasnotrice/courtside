@@ -25,6 +25,17 @@ defmodule CourtsideWeb.SyncController do
 
   def pull(conn, _params), do: bad_request(conn, "Send organization_id and client_id.")
 
+  # A row's change log, newest first. Read online; never part of sync.
+  def history(conn, %{"organization_id" => org, "table" => table, "key" => key})
+      when is_binary(org) and is_binary(table) and is_binary(key) do
+    respond(
+      conn,
+      with({:ok, entries} <- Sync.history(org, table, key), do: {:ok, %{entries: entries}})
+    )
+  end
+
+  def history(conn, _params), do: bad_request(conn, "Send organization_id, table and key.")
+
   # These are HTTP errors, never rejections: the client keeps its queue and retries.
   defp respond(conn, {:ok, result}), do: json(conn, result)
 

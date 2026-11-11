@@ -126,4 +126,34 @@ defmodule CourtsideWeb.SyncControllerTest do
 
     assert get_resp_header(other, "access-control-allow-origin") == []
   end
+
+  test "history returns a row's changes as JSON, newest first", %{conn: conn, org: org} do
+    p = player(org, "Ana")
+
+    conn
+    |> post(~p"/api/push", %{
+      organization_id: org.org,
+      client_id: "phone",
+      mutations: [
+        %{id: 1, name: "player.put", args: p},
+        %{id: 2, name: "player.put", args: %{id: p.id, name: "Ana B"}}
+      ]
+    })
+    |> json_response(200)
+
+    assert %{"entries" => [rename, _create]} =
+             build_conn()
+             |> get(~p"/api/history?organization_id=#{org.org}&table=players&key=#{p.id}")
+             |> json_response(200)
+
+    assert %{
+             "name" => "player.put",
+             "accepted" => true,
+             "changes" => %{"name" => ["Ana", "Ana B"]}
+           } =
+             rename
+
+    assert %{"error" => _} =
+             build_conn() |> get(~p"/api/history?table=players") |> json_response(400)
+  end
 end

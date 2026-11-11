@@ -306,4 +306,65 @@ defmodule Courtside.SyncTest do
       assert_receive :poke
     end
   end
+
+  describe "change log" do
+    test "records each accepted change with its before and after values", %{org: org} do
+      ids = seed!(org, @client)
+      key = %{drill_run_id: ids.run, player_id: ids.player}
+      push!(org.org, @client, [{"result.set_value", Map.put(key, :value, 38)}], 4)
+      push!(org.org, "client-b", [{"result.set_value", Map.put(key, :value, 41)}])
+
+      {:ok, [latest, first]} = Sync.history(org.org, "results", "#{ids.run}/#{ids.player}")
+
+      assert %{client_id: "client-b", accepted: true, changes: %{"value" => [38.0, 41.0]}} =
+               latest
+
+      assert %{client_id: @client, mutation_id: 4, changes: %{"value" => [nil, 38.0]}} = first
+      assert latest.version > first.version
+    end
+
+    test "a new row's fields start from nil, and an edit lists only what changed", %{org: org} do
+      p = player(org, "Ana")
+      push!(org.org, @client, [{"player.put", p}, {"player.put", %{id: p.id, name: "Ana B"}}])
+
+      {:ok, [rename, create]} = Sync.history(org.org, "players", p.id)
+      assert rename.changes == %{"name" => ["Ana", "Ana B"]}
+      assert create.changes == %{"name" => [nil, "Ana"], "program_id" => [nil, org.program]}
+    end
+
+    test "refused changes are logged against the row they named, with the reason", %{org: org} do
+      p = player(org, "Ana")
+      push!(org.org, @client, [{"player.put", p}, {"player.put", %{id: p.id, name: " "}}])
+
+      {:ok, [refused, _created]} = Sync.history(org.org, "players", p.id)
+      assert %{accepted: false, reason: "Name can't be blank", changes: nil} = refused
+    end
+
+    test "deleting a drill run logs how many results went with it", %{org: org} do
+      ids = seed!(org, @client)
+
+      push!(
+        org.org,
+        @client,
+        [
+          {"result.set_value", %{drill_run_id: ids.run, player_id: ids.player, value: 38}},
+          {"run.delete", %{id: ids.run}}
+        ],
+        4
+      )
+
+      {:ok, [delete | _]} = Sync.history(org.org, "runs", ids.run)
+      assert delete.changes == %{"deleted" => [false, true], "results_deleted" => [0, 1]}
+    end
+
+    test "history is limited to its organization", %{org: org} do
+      other = org!("Other High")
+      p = player(org)
+      push!(org.org, @client, [{"player.put", p}])
+
+      assert {:ok, [_]} = Sync.history(org.org, "players", p.id)
+      assert {:ok, []} = Sync.history(other.org, "players", p.id)
+      assert {:error, :unknown_organization} = Sync.history(uuid(), "players", p.id)
+    end
+  end
 end

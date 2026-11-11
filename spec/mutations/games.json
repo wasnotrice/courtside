@@ -1,0 +1,648 @@
+{
+  "given": {
+    "programs": [
+      {
+        "id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Girls' basketball",
+        "sport": "basketball"
+      },
+      {
+        "id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Boys' basketball",
+        "sport": "basketball"
+      }
+    ],
+    "seasons": [
+      {
+        "id": "f1111111-1111-4111-8111-111111111111",
+        "name": "2026–27",
+        "starts_on": "2026-08-01",
+        "ends_on": "2027-07-31"
+      }
+    ],
+    "teams": [
+      {
+        "id": "e1111111-1111-4111-8111-111111111111",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Varsity",
+        "default_rules": null
+      },
+      {
+        "id": "e2222222-2222-4222-8222-222222222222",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "JV",
+        "default_rules": {
+          "periods": 2,
+          "period_minutes": 20,
+          "overtime_minutes": 5,
+          "team_fouls_reset": "half",
+          "bonus_at": 7,
+          "bonus": "one_and_one",
+          "double_bonus_at": 10,
+          "foul_out_at": 5,
+          "technicals_to_eject": 2
+        }
+      },
+      {
+        "id": "e3333333-3333-4333-8333-333333333333",
+        "program_id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Varsity",
+        "default_rules": null
+      }
+    ],
+    "players": [
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Ana"
+      },
+      {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Ben"
+      },
+      {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "program_id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Cal"
+      }
+    ],
+    "games": [
+      {
+        "id": "a0000000-0000-4000-8000-0000000000a1",
+        "team_id": "e1111111-1111-4111-8111-111111111111",
+        "date": "2026-11-20",
+        "opponent": "Lincoln",
+        "home_away": "home",
+        "status": "live",
+        "rules": {
+          "periods": 4,
+          "period_minutes": 8,
+          "overtime_minutes": 4,
+          "team_fouls_reset": "period",
+          "bonus_at": 5,
+          "bonus": "two_shots",
+          "double_bonus_at": null,
+          "foul_out_at": 5,
+          "technicals_to_eject": 2
+        },
+        "official_us": null,
+        "official_them": null
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "creates a game with the default rules",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt"
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            },
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a2",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-27",
+              "opponent": "Roosevelt",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a new game copies its team's rules",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e2222222-2222-4222-8222-222222222222",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt"
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            },
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a2",
+              "team_id": "e2222222-2222-4222-8222-222222222222",
+              "date": "2026-11-27",
+              "opponent": "Roosevelt",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 2,
+                "period_minutes": 20,
+                "overtime_minutes": 5,
+                "team_fouls_reset": "half",
+                "bonus_at": 7,
+                "bonus": "one_and_one",
+                "double_bonus_at": 10,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a new game can bring its own rules",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt",
+          "rules": {
+            "periods": 2,
+            "period_minutes": 20,
+            "overtime_minutes": 5,
+            "team_fouls_reset": "half",
+            "bonus_at": 7,
+            "bonus": "one_and_one",
+            "double_bonus_at": 10,
+            "foul_out_at": 5,
+            "technicals_to_eject": 2
+          },
+          "home_away": "away"
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            },
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a2",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-27",
+              "opponent": "Roosevelt",
+              "home_away": "away",
+              "status": "live",
+              "rules": {
+                "periods": 2,
+                "period_minutes": 20,
+                "overtime_minutes": 5,
+                "team_fouls_reset": "half",
+                "bonus_at": 7,
+                "bonus": "one_and_one",
+                "double_bonus_at": 10,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "trims the opponent",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": "  Roosevelt "
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            },
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a2",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-27",
+              "opponent": "Roosevelt",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a blank opponent is refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": " "
+        }
+      },
+      "expect": {
+        "rejected": "Opponent can't be blank"
+      }
+    },
+    {
+      "name": "an unknown team is refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "99999999-9999-4999-8999-999999999999",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt"
+        }
+      },
+      "expect": {
+        "rejected": "That team no longer exists."
+      }
+    },
+    {
+      "name": "a date outside every season is refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2027-09-01",
+          "opponent": "Roosevelt"
+        }
+      },
+      "expect": {
+        "rejected": "No season includes that date."
+      }
+    },
+    {
+      "name": "home or away must be known",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt",
+          "home_away": "road"
+        }
+      },
+      "expect": {
+        "rejected": "Home away must be home, away or neutral"
+      }
+    },
+    {
+      "name": "rules missing a field are refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt",
+          "rules": {
+            "periods": 4,
+            "period_minutes": 8,
+            "overtime_minutes": 4,
+            "team_fouls_reset": "period",
+            "bonus_at": 5,
+            "double_bonus_at": null,
+            "foul_out_at": 5,
+            "technicals_to_eject": 2
+          }
+        }
+      },
+      "expect": {
+        "rejected": "Rules are invalid: bonus"
+      }
+    },
+    {
+      "name": "rules with an unknown field are refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt",
+          "rules": {
+            "periods": 4,
+            "period_minutes": 8,
+            "overtime_minutes": 4,
+            "team_fouls_reset": "period",
+            "bonus_at": 5,
+            "bonus": "two_shots",
+            "double_bonus_at": null,
+            "foul_out_at": 5,
+            "technicals_to_eject": 2,
+            "shot_clock": 35
+          }
+        }
+      },
+      "expect": {
+        "rejected": "Rules are invalid: shot_clock"
+      }
+    },
+    {
+      "name": "rules with a bad value are refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2",
+          "team_id": "e1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-27",
+          "opponent": "Roosevelt",
+          "rules": {
+            "periods": 0,
+            "period_minutes": 8,
+            "overtime_minutes": 4,
+            "team_fouls_reset": "period",
+            "bonus_at": 5,
+            "bonus": "two_shots",
+            "double_bonus_at": null,
+            "foul_out_at": 5,
+            "technicals_to_eject": 2
+          }
+        }
+      },
+      "expect": {
+        "rejected": "Rules are invalid: periods"
+      }
+    },
+    {
+      "name": "marks a game final with the official score",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a1",
+          "status": "final",
+          "official_us": 54,
+          "official_them": 48
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "final",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": 54,
+              "official_them": 48
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an official score can't be negative",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a1",
+          "official_us": -1
+        }
+      },
+      "expect": {
+        "rejected": "Official us must be greater than or equal to 0"
+      }
+    },
+    {
+      "name": "an unknown status is refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a1",
+          "status": "done"
+        }
+      },
+      "expect": {
+        "rejected": "Status must be live, final or reviewed"
+      }
+    },
+    {
+      "name": "a game can't move to another team",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a1",
+          "team_id": "e2222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rejected": "Team can't change after the game is created"
+      }
+    },
+    {
+      "name": "deleting a game removes it and its plays",
+      "with": {
+        "plays": [
+          {
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "fg2_made",
+            "foul_type": null,
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "period": 1,
+            "clock": null,
+            "video_at": null,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "game.delete",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a1"
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [],
+          "plays": []
+        }
+      }
+    },
+    {
+      "name": "deleting a missing game does nothing",
+      "mutation": {
+        "name": "game.delete",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a2"
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "changing the opponent to blank is refused",
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a1",
+          "opponent": " "
+        }
+      },
+      "expect": {
+        "rejected": "Opponent can't be blank"
+      }
+    }
+  ]
+}

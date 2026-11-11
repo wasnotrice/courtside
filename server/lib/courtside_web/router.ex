@@ -10,5 +10,6 @@ defmodule CourtsideWeb.Router do
 
     post "/push", SyncController, :push
     get "/pull", SyncController, :pull
+    get "/history", SyncController, :history
   end
 end

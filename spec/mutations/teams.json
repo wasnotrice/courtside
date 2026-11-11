@@ -16,7 +16,8 @@
       {
         "id": "e1111111-1111-4111-8111-111111111111",
         "program_id": "b1111111-1111-4111-8111-111111111111",
-        "name": "Varsity"
+        "name": "Varsity",
+        "default_rules": null
       }
     ]
   },
@@ -37,12 +38,14 @@
             {
               "id": "e1111111-1111-4111-8111-111111111111",
               "program_id": "b1111111-1111-4111-8111-111111111111",
-              "name": "Varsity"
+              "name": "Varsity",
+              "default_rules": null
             },
             {
               "id": "e2222222-2222-4222-8222-222222222222",
               "program_id": "b1111111-1111-4111-8111-111111111111",
-              "name": "JV"
+              "name": "JV",
+              "default_rules": null
             }
           ]
         }
@@ -92,7 +95,8 @@
             {
               "id": "e1111111-1111-4111-8111-111111111111",
               "program_id": "b1111111-1111-4111-8111-111111111111",
-              "name": "Varsity A"
+              "name": "Varsity A",
+              "default_rules": null
             }
           ]
         }
@@ -127,10 +131,76 @@
             {
               "id": "e1111111-1111-4111-8111-111111111111",
               "program_id": "b1111111-1111-4111-8111-111111111111",
-              "name": "Varsity A"
+              "name": "Varsity A",
+              "default_rules": null
             }
           ]
         }
+      }
+    },
+    {
+      "name": "sets a team's default rules",
+      "mutation": {
+        "name": "team.put",
+        "args": {
+          "id": "e1111111-1111-4111-8111-111111111111",
+          "default_rules": {
+            "periods": 2,
+            "period_minutes": 20,
+            "overtime_minutes": 5,
+            "team_fouls_reset": "half",
+            "bonus_at": 7,
+            "bonus": "one_and_one",
+            "double_bonus_at": 10,
+            "foul_out_at": 5,
+            "technicals_to_eject": 2
+          }
+        }
+      },
+      "expect": {
+        "rows": {
+          "teams": [
+            {
+              "id": "e1111111-1111-4111-8111-111111111111",
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Varsity",
+              "default_rules": {
+                "periods": 2,
+                "period_minutes": 20,
+                "overtime_minutes": 5,
+                "team_fouls_reset": "half",
+                "bonus_at": 7,
+                "bonus": "one_and_one",
+                "double_bonus_at": 10,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a team's default rules are checked",
+      "mutation": {
+        "name": "team.put",
+        "args": {
+          "id": "e1111111-1111-4111-8111-111111111111",
+          "default_rules": {
+            "periods": 2,
+            "period_minutes": 20,
+            "overtime_minutes": 5,
+            "team_fouls_reset": "half",
+            "bonus_at": 7,
+            "bonus": "three",
+            "double_bonus_at": 10,
+            "foul_out_at": 5,
+            "technicals_to_eject": 2
+          }
+        }
+      },
+      "expect": {
+        "rejected": "Rules are invalid: bonus"
       }
     }
   ]

@@ -25,7 +25,20 @@ defmodule Courtside.Sync do
   require Logger
 
   alias Courtside.Repo
-  alias Courtside.Schema.{Drill, DrillRun, Player, Program, Result, RosterEntry, Season, Team}
+
+  alias Courtside.Schema.{
+    Drill,
+    DrillRun,
+    Game,
+    Play,
+    Player,
+    Program,
+    Result,
+    RosterEntry,
+    Season,
+    Team
+  }
+
   alias Courtside.Sync.Mutators
 
   # The most mutations one push may carry. A client with more sends them in
@@ -38,13 +51,31 @@ defmodule Courtside.Sync do
   @tables [
     {:programs, Program, [:id, :name, :sport]},
     {:seasons, Season, [:id, :name, :starts_on, :ends_on]},
-    {:teams, Team, [:id, :program_id, :name]},
+    {:teams, Team, [:id, :program_id, :name, :default_rules]},
     {:players, Player, [:id, :program_id, :name]},
     {:roster_entries, RosterEntry, [:id, :team_id, :season_id, :player_id, :jersey]},
     {:drills, Drill, [:id, :program_id, :name, :kind, :default_setup, :archived]},
     {:runs, DrillRun, [:id, :program_id, :date, :drill_id, :setup]},
     # Results are addressed by (run, player); the server's id stays internal.
-    {:results, Result, [:drill_run_id, :player_id, :value, :setup]}
+    {:results, Result, [:drill_run_id, :player_id, :value, :setup]},
+    {:games, Game,
+     [:id, :team_id, :date, :opponent, :home_away, :status, :rules, :official_us, :official_them]},
+    {:plays, Play,
+     [
+       :id,
+       :game_id,
+       :side,
+       :player_id,
+       :stat,
+       :foul_type,
+       :assist_player_id,
+       :drawn_by_player_id,
+       :period,
+       :clock,
+       :video_at,
+       :position,
+       :recorded_at
+     ]}
   ]
 
   @type error :: :unknown_organization | :wrong_organization | :too_many_mutations
@@ -241,12 +272,110 @@ defmodule Courtside.Sync do
       end
 
     case outcome do
-      :ok ->
-        Repo.query!("RELEASE SAVEPOINT mutation")
-
       {:error, reason} ->
         Repo.query!("ROLLBACK TO SAVEPOINT mutation")
         record_rejection(client_id, id, name, args, reason, ctx.version)
+        log_change(client_id, m, ctx, %{accepted: false, reason: reason})
+
+      accepted ->
+        Repo.query!("RELEASE SAVEPOINT mutation")
+
+        row =
+          case accepted do
+            {:ok, row} -> row
+            :ok -> %{}
+          end
+
+        log_change(client_id, m, ctx, Map.put(row, :accepted, true))
+    end
+  end
+
+  # The change log: every mutation the server handles, accepted or refused, with what
+  # it changed. Never synced; read through history/3.
+  defp log_change(client_id, %{"id" => id, "name" => name} = m, ctx, entry) do
+    [name, args, reason] = scrub([name, Map.get(m, "args", %{}), entry[:reason]])
+    {row_table, row_key} = Map.get(entry, :row_table) |> row_of(entry, name, args)
+
+    Repo.insert_all("change_log", [
+      %{
+        id: Ecto.UUID.bingenerate(),
+        organization_id: Ecto.UUID.dump!(ctx.organization_id),
+        version: ctx.version,
+        client_id: client_id,
+        mutation_id: id,
+        name: name,
+        args: if(is_map(args), do: args, else: %{"value" => args}),
+        accepted: entry.accepted,
+        reason: reason,
+        row_table: row_table,
+        row_key: row_key,
+        changes: entry[:changes],
+        inserted_at: DateTime.utc_now()
+      }
+    ])
+  end
+
+  # The row a change is about. Accepted changes say which row they wrote; refused
+  # (and no-op) ones are matched from the mutation's name and args.
+  defp row_of(nil, _entry, name, args) when is_map(args) do
+    table =
+      case name |> String.split(".") |> hd() do
+        "program" -> "programs"
+        "season" -> "seasons"
+        "team" -> "teams"
+        "player" -> "players"
+        "roster" -> "roster_entries"
+        "drill" -> "drills"
+        "run" -> "runs"
+        "result" -> "results"
+        "game" -> "games"
+        "play" -> "plays"
+        _ -> nil
+      end
+
+    key =
+      if table == "results",
+        do: "#{args["drill_run_id"]}/#{args["player_id"]}",
+        else: args["id"]
+
+    {table, if(is_binary(key), do: key)}
+  end
+
+  defp row_of(nil, _entry, _name, _args), do: {nil, nil}
+  defp row_of(table, entry, _name, _args), do: {table, entry.row_key}
+
+  @doc """
+  The change log for one row (`table` and `key` as pull names them), newest first:
+  who changed what, when, and each field's value before and after. Refused changes
+  that named the row are included.
+  """
+  @spec history(String.t(), String.t(), String.t(), pos_integer()) ::
+          {:ok, [map()]} | {:error, :unknown_organization}
+  def history(organization_id, table, key, limit \\ 100) do
+    with {:ok, org} <- cast_org(organization_id),
+         true <-
+           Repo.exists?(
+             from v in "org_versions", where: v.organization_id == type(^org, Ecto.UUID)
+           ) || {:error, :unknown_organization} do
+      {:ok,
+       from(c in "change_log",
+         where:
+           c.organization_id == type(^org, Ecto.UUID) and
+             (c.row_table == ^table and c.row_key == ^key),
+         order_by: [desc: c.version, desc: c.mutation_id],
+         limit: ^limit,
+         select: %{
+           version: c.version,
+           client_id: c.client_id,
+           mutation_id: c.mutation_id,
+           name: c.name,
+           accepted: c.accepted,
+           reason: c.reason,
+           changes: c.changes,
+           at: c.inserted_at
+         }
+       )
+       |> Repo.all()}
     end
   end
 

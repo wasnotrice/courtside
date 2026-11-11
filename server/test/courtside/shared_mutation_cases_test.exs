@@ -10,7 +10,19 @@ defmodule Courtside.SharedMutationCasesTest do
   import Ecto.Query
 
   alias Courtside.{Organizations, Repo, Sync}
-  alias Courtside.Schema.{Drill, DrillRun, Player, Program, Result, RosterEntry, Season, Team}
+
+  alias Courtside.Schema.{
+    Drill,
+    DrillRun,
+    Game,
+    Play,
+    Player,
+    Program,
+    Result,
+    RosterEntry,
+    Season,
+    Team
+  }
 
   @dir Path.expand("../../../spec/mutations", __DIR__)
 
@@ -19,12 +31,30 @@ defmodule Courtside.SharedMutationCasesTest do
   @tables [
     {"programs", Program, [:id, :name, :sport]},
     {"seasons", Season, [:id, :name, :starts_on, :ends_on]},
-    {"teams", Team, [:id, :program_id, :name]},
+    {"teams", Team, [:id, :program_id, :name, :default_rules]},
     {"players", Player, [:id, :program_id, :name]},
     {"roster_entries", RosterEntry, [:id, :team_id, :season_id, :player_id, :jersey]},
     {"drills", Drill, [:id, :program_id, :name, :kind, :default_setup, :archived]},
     {"runs", DrillRun, [:id, :program_id, :date, :drill_id, :setup]},
-    {"results", Result, [:drill_run_id, :player_id, :value, :setup]}
+    {"results", Result, [:drill_run_id, :player_id, :value, :setup]},
+    {"games", Game,
+     [:id, :team_id, :date, :opponent, :home_away, :status, :rules, :official_us, :official_them]},
+    {"plays", Play,
+     [
+       :id,
+       :game_id,
+       :side,
+       :player_id,
+       :stat,
+       :foul_type,
+       :assist_player_id,
+       :drawn_by_player_id,
+       :period,
+       :clock,
+       :video_at,
+       :position,
+       :recorded_at
+     ]}
   ]
 
   for file <- @dir |> Path.join("*.json") |> Path.wildcard() |> Enum.sort() do

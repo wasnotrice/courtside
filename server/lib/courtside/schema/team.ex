@@ -11,6 +11,7 @@ defmodule Courtside.Schema.Team do
   schema "teams" do
     field :program_id, :binary_id
     field :name, :string
+    field :default_rules, :map
     field :organization_id, :binary_id
     field :version, :integer
     field :deleted, :boolean, default: false

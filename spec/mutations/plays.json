@@ -1,0 +1,1052 @@
+{
+  "given": {
+    "programs": [
+      {
+        "id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Girls' basketball",
+        "sport": "basketball"
+      },
+      {
+        "id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Boys' basketball",
+        "sport": "basketball"
+      }
+    ],
+    "seasons": [
+      {
+        "id": "f1111111-1111-4111-8111-111111111111",
+        "name": "2026–27",
+        "starts_on": "2026-08-01",
+        "ends_on": "2027-07-31"
+      }
+    ],
+    "teams": [
+      {
+        "id": "e1111111-1111-4111-8111-111111111111",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Varsity",
+        "default_rules": null
+      },
+      {
+        "id": "e3333333-3333-4333-8333-333333333333",
+        "program_id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Varsity",
+        "default_rules": null
+      }
+    ],
+    "players": [
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Ana"
+      },
+      {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Ben"
+      },
+      {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "program_id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Cal"
+      }
+    ],
+    "games": [
+      {
+        "id": "a0000000-0000-4000-8000-0000000000a1",
+        "team_id": "e1111111-1111-4111-8111-111111111111",
+        "date": "2026-11-20",
+        "opponent": "Lincoln",
+        "home_away": "home",
+        "status": "live",
+        "rules": {
+          "periods": 4,
+          "period_minutes": 8,
+          "overtime_minutes": 4,
+          "team_fouls_reset": "period",
+          "bonus_at": 5,
+          "bonus": "two_shots",
+          "double_bonus_at": null,
+          "foul_out_at": 5,
+          "technicals_to_eject": 2
+        },
+        "official_us": null,
+        "official_them": null
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "records a made 2",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "fg2_made",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "records a team rebound with no player",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": null,
+          "stat": "dreb",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": null,
+              "stat": "dreb",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "records an opponent's 3",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "them",
+          "player_id": null,
+          "stat": "fg3_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "them",
+              "player_id": null,
+              "stat": "fg3_made",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "the other team's plays can't have a player",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "them",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rejected": "The other team's plays can't have a player."
+      }
+    },
+    {
+      "name": "a made 3 can carry an assist",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg3_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "assist_player_id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": "22222222-2222-4222-8222-222222222222",
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "fg3_made",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a miss can't carry an assist",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_missed",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "assist_player_id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rejected": "Only made shots can have an assist."
+      }
+    },
+    {
+      "name": "a player can't assist their own shot",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "assist_player_id": "11111111-1111-4111-8111-111111111111"
+        }
+      },
+      "expect": {
+        "rejected": "A player can't assist their own shot."
+      }
+    },
+    {
+      "name": "a foul is personal unless it says otherwise",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "foul",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": "personal",
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "foul",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "records an offensive foul",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "foul",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "foul_type": "offensive"
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": "offensive",
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "foul",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "only fouls have a foul type",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "foul_type": "technical"
+        }
+      },
+      "expect": {
+        "rejected": "Only fouls have a foul type."
+      }
+    },
+    {
+      "name": "an unknown foul type is refused",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "foul",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "foul_type": "illegal"
+        }
+      },
+      "expect": {
+        "rejected": "Foul type is invalid"
+      }
+    },
+    {
+      "name": "records the player who drew the other team's foul",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "them",
+          "player_id": null,
+          "stat": "foul",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "drawn_by_player_id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": "personal",
+              "assist_player_id": null,
+              "drawn_by_player_id": "22222222-2222-4222-8222-222222222222",
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "them",
+              "player_id": null,
+              "stat": "foul",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "only the other team's fouls can be drawn",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "foul",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "drawn_by_player_id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rejected": "Only the other team's fouls can be drawn."
+      }
+    },
+    {
+      "name": "a player from another program is refused",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "33333333-3333-4333-8333-333333333333",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rejected": "That player is in a different program."
+      }
+    },
+    {
+      "name": "an unknown player is refused",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "99999999-9999-4999-8999-999999999999",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rejected": "That player is no longer on the roster."
+      }
+    },
+    {
+      "name": "an assist by a player from another program is refused",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "assist_player_id": "33333333-3333-4333-8333-333333333333"
+        }
+      },
+      "expect": {
+        "rejected": "That player is in a different program."
+      }
+    },
+    {
+      "name": "an unknown stat is refused",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "dunk",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rejected": "Stat is invalid"
+      }
+    },
+    {
+      "name": "the period must be at least 1",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 0,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rejected": "Period must be greater than 0"
+      }
+    },
+    {
+      "name": "a clock up to the period's length is allowed",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "clock": 480
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": 480,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "fg2_made",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a clock past the period's length is refused",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "clock": 481
+        }
+      },
+      "expect": {
+        "rejected": "Clock is more than the period's length."
+      }
+    },
+    {
+      "name": "overtime periods are shorter",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 5,
+          "position": "a0",
+          "recorded_at": 1794000000000,
+          "clock": 300
+        }
+      },
+      "expect": {
+        "rejected": "Clock is more than the period's length."
+      }
+    },
+    {
+      "name": "a new play needs a position",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a1",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rejected": "Position can't be blank"
+      }
+    },
+    {
+      "name": "a play in a deleted game is refused",
+      "with": {
+        "games": [
+          {
+            "id": "a0000000-0000-4000-8000-0000000000a2",
+            "team_id": "e1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-20",
+            "opponent": "Lincoln",
+            "home_away": "home",
+            "status": "live",
+            "rules": {
+              "periods": 4,
+              "period_minutes": 8,
+              "overtime_minutes": 4,
+              "team_fouls_reset": "period",
+              "bonus_at": 5,
+              "bonus": "two_shots",
+              "double_bonus_at": null,
+              "foul_out_at": 5,
+              "technicals_to_eject": 2
+            },
+            "official_us": null,
+            "official_them": null,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a2",
+          "side": "us",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "stat": "fg2_made",
+          "period": 1,
+          "position": "a0",
+          "recorded_at": 1794000000000
+        }
+      },
+      "expect": {
+        "rejected": "That game was deleted."
+      }
+    },
+    {
+      "name": "an edit can send just the player",
+      "with": {
+        "plays": [
+          {
+            "foul_type": null,
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "fg2_made",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "player_id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "22222222-2222-4222-8222-222222222222",
+              "stat": "fg2_made",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an edit can set the clock and film time",
+      "with": {
+        "plays": [
+          {
+            "foul_type": null,
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "fg2_made",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "clock": 95,
+          "video_at": 612.5
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": 95,
+              "video_at": 612.5,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "fg2_made",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an edit to a deleted play is refused",
+      "with": {
+        "plays": [
+          {
+            "foul_type": null,
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "fg2_made",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "player_id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rejected": "That play was deleted."
+      }
+    },
+    {
+      "name": "a play can't move to another game",
+      "with": {
+        "games": [
+          {
+            "id": "a0000000-0000-4000-8000-0000000000a2",
+            "team_id": "e1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-20",
+            "opponent": "Lincoln",
+            "home_away": "home",
+            "status": "live",
+            "rules": {
+              "periods": 4,
+              "period_minutes": 8,
+              "overtime_minutes": 4,
+              "team_fouls_reset": "period",
+              "bonus_at": 5,
+              "bonus": "two_shots",
+              "double_bonus_at": null,
+              "foul_out_at": 5,
+              "technicals_to_eject": 2
+            },
+            "official_us": null,
+            "official_them": null
+          }
+        ],
+        "plays": [
+          {
+            "foul_type": null,
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "fg2_made",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "game_id": "a0000000-0000-4000-8000-0000000000a2"
+        }
+      },
+      "expect": {
+        "rejected": "Game can't change after the play is recorded"
+      }
+    },
+    {
+      "name": "changing a foul to another stat must clear its foul type",
+      "with": {
+        "plays": [
+          {
+            "foul_type": "offensive",
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "foul",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "stat": "tov"
+        }
+      },
+      "expect": {
+        "rejected": "Only fouls have a foul type."
+      }
+    },
+    {
+      "name": "changing a foul to a turnover with the foul type cleared",
+      "with": {
+        "plays": [
+          {
+            "foul_type": "offensive",
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "foul",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1",
+          "stat": "tov",
+          "foul_type": null
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "tov",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "deletes a play",
+      "with": {
+        "plays": [
+          {
+            "foul_type": null,
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "fg2_made",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.delete",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d1"
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": []
+        }
+      }
+    },
+    {
+      "name": "deleting a missing play does nothing",
+      "with": {
+        "plays": [
+          {
+            "foul_type": null,
+            "assist_player_id": null,
+            "drawn_by_player_id": null,
+            "clock": null,
+            "video_at": null,
+            "id": "d0000000-0000-4000-8000-0000000000d1",
+            "game_id": "a0000000-0000-4000-8000-0000000000a1",
+            "side": "us",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "stat": "fg2_made",
+            "period": 1,
+            "position": "a0",
+            "recorded_at": 1794000000000
+          }
+        ]
+      },
+      "mutation": {
+        "name": "play.delete",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d2"
+        }
+      },
+      "expect": {
+        "rows": {
+          "plays": [
+            {
+              "foul_type": null,
+              "assist_player_id": null,
+              "drawn_by_player_id": null,
+              "clock": null,
+              "video_at": null,
+              "id": "d0000000-0000-4000-8000-0000000000d1",
+              "game_id": "a0000000-0000-4000-8000-0000000000a1",
+              "side": "us",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "stat": "fg2_made",
+              "period": 1,
+              "position": "a0",
+              "recorded_at": 1794000000000
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -23,10 +23,28 @@ defmodule Courtside.Sync.Mutators do
   import Ecto.Changeset
   import Ecto.Query
 
-  alias Courtside.Repo
-  alias Courtside.Schema.{Drill, DrillRun, Player, Program, Result, RosterEntry, Season, Team}
+  alias Courtside.{Basketball, Repo}
+
+  alias Courtside.Schema.{
+    Drill,
+    DrillRun,
+    Game,
+    Play,
+    Player,
+    Program,
+    Result,
+    RosterEntry,
+    Season,
+    Team
+  }
 
   @type ctx :: %{organization_id: String.t(), version: pos_integer()}
+
+  @typedoc """
+  What an accepted change wrote, for the change log: the row as pull names it, and each
+  changed field's value before and after.
+  """
+  @type log :: %{row_table: String.t(), row_key: String.t(), changes: map()}
 
   # The arguments each mutation accepts. Anything else is refused rather than
   # silently dropped by `cast`, so a field name the client and server disagree
@@ -34,7 +52,7 @@ defmodule Courtside.Sync.Mutators do
   @fields %{
     "program.put" => ~w(id name sport),
     "season.put" => ~w(id name starts_on ends_on),
-    "team.put" => ~w(id program_id name),
+    "team.put" => ~w(id program_id name default_rules),
     "player.put" => ~w(id program_id name),
     "roster.put" => ~w(id team_id season_id player_id jersey),
     "roster.remove" => ~w(id),
@@ -44,10 +62,19 @@ defmodule Courtside.Sync.Mutators do
     "run.delete" => ~w(id),
     "result.set_value" => ~w(drill_run_id player_id value),
     "result.set_setup" => ~w(drill_run_id player_id setup),
-    "result.clear" => ~w(drill_run_id player_id)
+    "result.clear" => ~w(drill_run_id player_id),
+    "game.put" => ~w(id team_id date opponent home_away status rules official_us official_them),
+    "game.delete" => ~w(id),
+    "play.put" =>
+      ~w(id game_id side player_id stat foul_type assist_player_id drawn_by_player_id period clock video_at position recorded_at),
+    "play.delete" => ~w(id)
   }
 
-  @spec run(String.t(), map(), ctx()) :: :ok | {:error, String.t()}
+  @doc """
+  Applies one mutation. `{:ok, log}` when it wrote a row, `:ok` when it was accepted
+  but changed nothing (deleting something already gone), `{:error, reason}` when refused.
+  """
+  @spec run(String.t(), map(), ctx()) :: :ok | {:ok, log()} | {:error, String.t()}
   def run(name, args, ctx) do
     case @fields do
       %{^name => fields} ->
@@ -75,6 +102,10 @@ defmodule Courtside.Sync.Mutators do
   defp dispatch("result.set_value", args, ctx), do: set_result_value(args, ctx)
   defp dispatch("result.set_setup", args, ctx), do: set_result_setup(args, ctx)
   defp dispatch("result.clear", args, ctx), do: clear_result(args, ctx)
+  defp dispatch("game.put", args, ctx), do: put_game(args, ctx)
+  defp dispatch("game.delete", args, ctx), do: delete_game(args, ctx)
+  defp dispatch("play.put", args, ctx), do: put_play(args, ctx)
+  defp dispatch("play.delete", args, ctx), do: delete_play(args, ctx)
 
   # --- programs, seasons and teams ------------------------------------------
 
@@ -139,11 +170,12 @@ defmodule Courtside.Sync.Mutators do
     with {:ok, existing} <- load_for_put(Team, args["id"], ctx),
          {:ok, _program} <- fetch_program(args, existing, ctx) do
       (existing || %Team{id: args["id"], organization_id: ctx.organization_id})
-      |> cast(args, [:program_id, :name])
+      |> cast(args, [:program_id, :name, :default_rules])
       |> trim_name()
       |> validate_required([:name])
       |> validate_length(:name, max: 100)
       |> validate_unchanged(:program_id, existing, "can't change after the team is created")
+      |> validate_rules(:default_rules)
       |> save(ctx)
     end
   end
@@ -326,14 +358,14 @@ defmodule Courtside.Sync.Mutators do
         :ok
 
       {:ok, run} ->
-        run |> change(deleted: true, version: ctx.version) |> Repo.update!()
+        {count, _} =
+          from(r in Result, where: r.drill_run_id == ^run.id and not r.deleted)
+          |> Repo.update_all(
+            set: [deleted: true, version: ctx.version, updated_at: DateTime.utc_now(:second)]
+          )
 
-        from(r in Result, where: r.drill_run_id == ^run.id and not r.deleted)
-        |> Repo.update_all(
-          set: [deleted: true, version: ctx.version, updated_at: DateTime.utc_now(:second)]
-        )
-
-        :ok
+        with {:ok, log} <- run |> change(deleted: true) |> save(ctx),
+             do: {:ok, put_in(log.changes["results_deleted"], [0, count])}
     end
   end
 
@@ -417,6 +449,199 @@ defmodule Courtside.Sync.Mutators do
     do: {:error, "Time must be above zero."}
 
   defp parse_value(_kind, value, _setup), do: {:ok, value / 1}
+
+  # --- games and plays ------------------------------------------------------
+
+  defp put_game(args, ctx) do
+    with {:ok, existing} <- load_for_put(Game, args["id"], ctx),
+         {:ok, team} <-
+           fetch_live(
+             Team,
+             sent_or_stored(args, existing, :team_id),
+             ctx,
+             "That team no longer exists."
+           ) do
+      cs =
+        (existing || %Game{id: args["id"], organization_id: ctx.organization_id})
+        |> cast(args, [
+          :team_id,
+          :date,
+          :opponent,
+          :home_away,
+          :status,
+          :rules,
+          :official_us,
+          :official_them
+        ])
+        |> validate_unchanged(:team_id, existing, "can't change after the game is created")
+        |> default_rules(existing, team)
+        |> trim(:opponent)
+        |> validate_required([:date, :opponent, :rules])
+        |> validate_length(:opponent, max: 100)
+        |> validate_inclusion(:home_away, ~w(home away neutral),
+          message: "must be home, away or neutral"
+        )
+        |> validate_inclusion(:status, ~w(live final reviewed),
+          message: "must be live, final or reviewed"
+        )
+        |> validate_number(:official_us, greater_than_or_equal_to: 0)
+        |> validate_number(:official_them, greater_than_or_equal_to: 0)
+        |> validate_rules(:rules)
+
+      with :ok <- check_in_season(cs, ctx), do: save(cs, ctx)
+    end
+  end
+
+  # A new game copies its team's rules, or the default, unless it brings its own.
+  defp default_rules(cs, nil, team) do
+    if get_field(cs, :rules) == nil,
+      do: put_change(cs, :rules, team.default_rules || Basketball.default_rules()),
+      else: cs
+  end
+
+  defp default_rules(cs, _existing, _team), do: cs
+
+  defp validate_rules(cs, field) do
+    case get_change(cs, field) do
+      nil ->
+        cs
+
+      rules ->
+        case Basketball.rules_problem(rules) do
+          nil -> cs
+          problem -> add_error(cs, field, "are invalid", problem: problem)
+        end
+    end
+  end
+
+  defp delete_game(%{"id" => id}, ctx) do
+    case fetch_live(Game, id, ctx, :missing) do
+      {:error, :missing} ->
+        :ok
+
+      {:ok, game} ->
+        {count, _} =
+          from(p in Play, where: p.game_id == ^game.id and not p.deleted)
+          |> Repo.update_all(
+            set: [deleted: true, version: ctx.version, updated_at: DateTime.utc_now(:second)]
+          )
+
+        with {:ok, log} <- game |> change(deleted: true) |> save(ctx),
+             do: {:ok, put_in(log.changes["plays_deleted"], [0, count])}
+    end
+  end
+
+  @play_fields [
+    :game_id,
+    :side,
+    :player_id,
+    :stat,
+    :foul_type,
+    :assist_player_id,
+    :drawn_by_player_id,
+    :period,
+    :clock,
+    :video_at,
+    :position,
+    :recorded_at
+  ]
+
+  # The checks run in this order on both sides, so a play with one problem gets the
+  # same message from the phone and the server.
+  defp put_play(args, ctx) do
+    with {:ok, existing} <- load_for_put(Play, args["id"], ctx),
+         :ok <- check_play_live(existing),
+         {:ok, game} <-
+           fetch_live(
+             Game,
+             sent_or_stored(args, existing, :game_id),
+             ctx,
+             "That game was deleted."
+           ),
+         cs =
+           (existing || %Play{id: args["id"], organization_id: ctx.organization_id})
+           |> cast(args, @play_fields)
+           |> validate_unchanged(:game_id, existing, "can't change after the play is recorded")
+           |> default_foul_type()
+           |> validate_required([:side, :stat, :period, :position, :recorded_at])
+           |> validate_inclusion(:side, ~w(us them), message: "must be us or them")
+           |> validate_inclusion(:stat, Basketball.stats(), message: "is invalid")
+           |> validate_number(:period, greater_than: 0)
+           |> validate_number(:clock, greater_than_or_equal_to: 0)
+           |> validate_number(:video_at, greater_than_or_equal_to: 0),
+         :ok <- if(cs.valid?, do: :ok, else: {:error, describe(cs)}),
+         :ok <- check_play_rules(cs, game, ctx) do
+      save(cs, ctx)
+    end
+  end
+
+  defp check_play_live(%Play{deleted: true}), do: {:error, "That play was deleted."}
+  defp check_play_live(_existing), do: :ok
+
+  # A foul is personal unless it says otherwise.
+  defp default_foul_type(cs) do
+    if get_field(cs, :stat) == "foul" and get_field(cs, :foul_type) == nil,
+      do: put_change(cs, :foul_type, "personal"),
+      else: cs
+  end
+
+  defp check_play_rules(cs, game, ctx) do
+    play = Map.new(@play_fields, &{&1, get_field(cs, &1)})
+    team = Repo.get!(Team, game.team_id)
+
+    cond do
+      play.side == "them" and play.player_id != nil ->
+        {:error, "The other team's plays can't have a player."}
+
+      play.assist_player_id != nil and
+          not (play.side == "us" and play.stat in Basketball.made_field_goals()) ->
+        {:error, "Only made shots can have an assist."}
+
+      play.assist_player_id != nil and play.assist_player_id == play.player_id ->
+        {:error, "A player can't assist their own shot."}
+
+      play.foul_type != nil and play.stat != "foul" ->
+        {:error, "Only fouls have a foul type."}
+
+      play.foul_type != nil and play.foul_type not in Basketball.foul_types() ->
+        {:error, "Foul type is invalid"}
+
+      play.drawn_by_player_id != nil and not (play.side == "them" and play.stat == "foul") ->
+        {:error, "Only the other team's fouls can be drawn."}
+
+      true ->
+        with :ok <- check_play_players(play, team, ctx), do: check_clock(play, game)
+    end
+  end
+
+  defp check_play_players(play, team, ctx) do
+    [play.player_id, play.assist_player_id, play.drawn_by_player_id]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reduce_while(:ok, fn id, :ok ->
+      with {:ok, player} <-
+             fetch_live(Player, id, ctx, "That player is no longer on the roster."),
+           :ok <- same_program(player, team, "That player is in a different program.") do
+        {:cont, :ok}
+      else
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp check_clock(%{clock: nil}, _game), do: :ok
+
+  defp check_clock(play, game) do
+    if play.clock > Basketball.period_seconds(game.rules, play.period),
+      do: {:error, "Clock is more than the period's length."},
+      else: :ok
+  end
+
+  defp delete_play(%{"id" => id}, ctx) do
+    case fetch_live(Play, id, ctx, :missing) do
+      {:ok, play} -> play |> change(deleted: true) |> save(ctx)
+      {:error, :missing} -> :ok
+    end
+  end
 
   # --- shared ---------------------------------------------------------------
 
@@ -505,7 +730,11 @@ defmodule Courtside.Sync.Mutators do
       else: add_error(cs, field, message)
   end
 
-  defp trim_name(cs), do: update_change(cs, :name, &String.trim/1)
+  defp trim_name(cs), do: trim(cs, :name)
+
+  # cast turns a blank string into nil, which an edit then sends as a change.
+  defp trim(cs, field),
+    do: update_change(cs, field, &if(is_binary(&1), do: String.trim(&1), else: &1))
 
   defp validate_setup_for(cs, "makes"),
     do: cs |> validate_required([:setup], message: "shots are required") |> validate_setup(:setup)
@@ -518,24 +747,56 @@ defmodule Courtside.Sync.Mutators do
 
   defp validate_setup(cs, field), do: validate_number(cs, field, greater_than: 0)
 
+  # Writes the row at the push's version and returns what changed, for the change log.
   defp save(cs, ctx) do
-    cs
-    |> put_change(:version, ctx.version)
-    |> Repo.insert_or_update()
-    |> to_result()
+    changes = changed_fields(cs)
+
+    case cs |> put_change(:version, ctx.version) |> Repo.insert_or_update() do
+      {:ok, row} -> {:ok, %{row_table: wire_table(row), row_key: row_key(row), changes: changes}}
+      {:error, %Ecto.Changeset{} = cs} -> {:error, describe(cs)}
+    end
   end
 
-  defp to_result({:ok, _}), do: :ok
-  defp to_result({:error, %Ecto.Changeset{} = cs}), do: {:error, describe(cs)}
+  # %{"field" => [before, after]}; before is nil for a new row.
+  defp changed_fields(cs) do
+    new? = cs.data.__meta__.state == :built
+
+    for {field, value} <- cs.changes,
+        field not in [:version, :inserted_at, :updated_at],
+        into: %{},
+        do: {Atom.to_string(field), [if(new?, do: nil, else: Map.get(cs.data, field)), value]}
+  end
+
+  # The table and key a row has in pull.
+  defp wire_table(%Program{}), do: "programs"
+  defp wire_table(%Season{}), do: "seasons"
+  defp wire_table(%Team{}), do: "teams"
+  defp wire_table(%Player{}), do: "players"
+  defp wire_table(%RosterEntry{}), do: "roster_entries"
+  defp wire_table(%Drill{}), do: "drills"
+  defp wire_table(%DrillRun{}), do: "runs"
+  defp wire_table(%Result{}), do: "results"
+  defp wire_table(%Game{}), do: "games"
+  defp wire_table(%Play{}), do: "plays"
+
+  defp row_key(%Result{drill_run_id: run, player_id: player}), do: "#{run}/#{player}"
+  defp row_key(%{id: id}), do: id
 
   defp describe(cs) do
     cs
-    |> traverse_errors(fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {k, val}, acc ->
-        String.replace(acc, "%{#{k}}", to_string(val))
-      end)
+    |> traverse_errors(fn
+      {_msg, [problem: problem]} ->
+        {:full, problem}
+
+      {msg, opts} ->
+        Enum.reduce(opts, msg, fn {k, val}, acc ->
+          String.replace(acc, "%{#{k}}", to_string(val))
+        end)
     end)
-    |> Enum.map_join("; ", fn {field, msgs} -> "#{humanize(field)} #{Enum.join(msgs, ", ")}" end)
+    |> Enum.map_join("; ", fn
+      {_field, [{:full, problem} | _]} -> problem
+      {field, msgs} -> "#{humanize(field)} #{Enum.join(msgs, ", ")}"
+    end)
   end
 
   # program_id -> "Program", default_setup -> "Default setup".
