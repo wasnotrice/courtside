@@ -34,6 +34,17 @@ describe('computeView', () => {
 		expect(view.state.results.get(resultKey(runId, playerId))?.value).toBe(30);
 	});
 
+	it('copies each table once, and the view never changes after the replay', () => {
+		const queue = pending(player({ name: 'A' }), player({ name: 'B' }));
+		const view = computeView(base(), queue);
+		const players = view.state.players;
+
+		// Checking the next tap against the view (as mutate() does) must not write into it.
+		apply(view.state, player({ name: 'C' }));
+		expect(view.state.players).toBe(players);
+		expect(players.size).toBe(2);
+	});
+
 	it('leaves the base untouched', () => {
 		const before = base();
 		computeView(before, pending(player()));

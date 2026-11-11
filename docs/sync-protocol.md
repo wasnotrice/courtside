@@ -209,7 +209,10 @@ queues.
 ## Upgrading the phone's database
 
 A new version of the app can change the IndexedDB schema. An upgrade may throw
-away the base, since the next pull brings it back, but never the queue.
+away the base, since the next pull brings it back, but never the queue. **Adding a
+synced table must throw the base away too**: rows the server already has in that
+table sit below the phone's cursor, so a phone that kept its cursor would never pull
+them. Version 3 (games and plays) does this.
 `store.test.ts` upgrades a real version 1 database with pending changes and
 checks they survive.
 

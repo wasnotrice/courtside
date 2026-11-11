@@ -128,7 +128,7 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	'roster.remove': (state, args) => {
 		if (!state.roster_entries.has(args.id)) return state;
 
-		const roster_entries = new Map(state.roster_entries);
+		const roster_entries = writable(state.roster_entries);
 		roster_entries.delete(args.id);
 		return { ...state, roster_entries };
 	},
@@ -195,9 +195,9 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	'run.delete': (state, args) => {
 		if (!state.runs.has(args.id)) return state;
 
-		const runs = new Map(state.runs);
+		const runs = writable(state.runs);
 		runs.delete(args.id);
-		const results = new Map(state.results);
+		const results = writable(state.results);
 		for (const r of resultsOf(state, args.id)) results.delete(resultKey(r.drill_run_id, r.player_id));
 		return { ...state, runs, results };
 	},
@@ -230,7 +230,7 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 		const key = resultKey(args.drill_run_id, args.player_id);
 		if (!state.results.has(key)) return state;
 
-		const results = new Map(state.results);
+		const results = writable(state.results);
 		results.delete(key);
 		return { ...state, results };
 	},
@@ -276,9 +276,9 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	'game.delete': (state, args) => {
 		if (!state.games.has(args.id)) return state;
 
-		const games = new Map(state.games);
+		const games = writable(state.games);
 		games.delete(args.id);
-		const plays = new Map(state.plays);
+		const plays = writable(state.plays);
 		for (const p of state.plays.values()) if (p.game_id === args.id) plays.delete(p.id);
 		return { ...state, games, plays };
 	},
@@ -355,7 +355,7 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	'play.delete': (state, args) => {
 		if (!state.plays.has(args.id)) return state;
 
-		const plays = new Map(state.plays);
+		const plays = writable(state.plays);
 		plays.delete(args.id);
 		return { ...state, plays };
 	}
@@ -429,8 +429,38 @@ export function apply(state: State, mutation: MutationInput): State {
 
 // --- helpers -----------------------------------------------------------------
 
+/**
+ * Tables created during the current replay (see `replayInPlace`). A mutator may write
+ * into these directly, because nothing outside the replay has seen them yet. Outside a
+ * replay this is null and every write copies, so `apply` stays pure.
+ */
+let owned: WeakSet<ReadonlyMap<string, unknown>> | null = null;
+
+/** A table this mutation may write into: the table itself if the replay owns it, else a copy. */
+function writable<T>(map: ReadonlyMap<string, T>): Map<string, T> {
+	if (owned?.has(map)) return map as Map<string, T>;
+	const copy = new Map(map);
+	owned?.add(copy);
+	return copy;
+}
+
 function put<T>(map: ReadonlyMap<string, T>, key: string, value: T): Map<string, T> {
-	return new Map(map).set(key, value);
+	return writable(map).set(key, value);
+}
+
+/**
+ * Runs `fn` with copy-on-first-write tables: each table is copied at most once, however
+ * many mutations `fn` applies. Replaying 400 pending plays otherwise copies the plays
+ * table 400 times. The caller must not let the intermediate states escape.
+ */
+export function replayInPlace<T>(fn: () => T): T {
+	const previous = owned;
+	owned = new WeakSet();
+	try {
+		return fn();
+	} finally {
+		owned = previous;
+	}
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

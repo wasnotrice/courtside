@@ -5,7 +5,7 @@
 // - computeView replays pending mutations on top of the base. That's what the
 //   UI shows.
 
-import { apply, MutationError } from './mutators';
+import { apply, MutationError, replayInPlace } from './mutators';
 import { resultKey, type PendingMutation, type PullResponse, type State } from './types';
 
 export interface View {
@@ -22,13 +22,19 @@ export function computeView(base: State, pending: readonly PendingMutation[]): V
 	let state = base;
 	const skipped = new Map<number, string>();
 
-	for (const m of pending) {
-		try {
-			state = apply(state, m);
-		} catch (e) {
-			skipped.set(m.id, e instanceof MutationError ? e.message : String(e));
+	// Each table is copied once for the whole replay, not once per mutation. The base is
+	// never written: its tables aren't owned by the replay, so the first write copies.
+	// A mutation that throws partway can't leave a half-applied change behind, because
+	// every mutator checks everything before its first write.
+	replayInPlace(() => {
+		for (const m of pending) {
+			try {
+				state = apply(state, m);
+			} catch (e) {
+				skipped.set(m.id, e instanceof MutationError ? e.message : String(e));
+			}
 		}
-	}
+	});
 
 	return { state, skipped };
 }
