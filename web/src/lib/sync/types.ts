@@ -140,8 +140,8 @@ export interface Rejection {
 	reason: string;
 }
 
+/** The transport adds the organization; the engine doesn't need to know it. */
 export interface PushRequest {
-	organization_id: string;
 	client_id: string;
 	mutations: PendingMutation[];
 }

@@ -16,6 +16,8 @@ export interface Snapshot {
 	clientId: string;
 	/** The server version this client's base reflects. */
 	cursor: number;
+	/** The server's data id when the base was pulled; null before the first pull. */
+	dataId: string | null;
 	/** The last of this client's mutations the server has processed. */
 	lastMutationId: number;
 	base: State;
@@ -37,6 +39,12 @@ export interface LocalStore {
 	 * dismissed.
 	 */
 	applyPull(pull: PullResponse): Promise<void>;
+	/**
+	 * Throws away the base, cursor and data id, for a fresh pull after the
+	 * server's data was recreated or restored. Keeps the client id, pending
+	 * mutations and rejections: the queue exists only on this device.
+	 */
+	restartBase(): Promise<void>;
 	dismissRejection(mutationId: number): Promise<void>;
 	/** Erases everything. The next load starts as a brand-new client. */
 	reset(): Promise<void>;
@@ -53,6 +61,7 @@ export class MemoryStore implements LocalStore {
 		this.snap ??= {
 			clientId: newClientId(),
 			cursor: 0,
+			dataId: null,
 			lastMutationId: 0,
 			base: emptyState(),
 			pending: [],
@@ -72,9 +81,17 @@ export class MemoryStore implements LocalStore {
 		const snap = await this.ensure();
 		snap.base = applyPull(snap.base, pull.changes);
 		snap.cursor = pull.cursor;
+		snap.dataId = pull.data_id;
 		snap.lastMutationId = pull.last_mutation_id;
 		snap.pending = snap.pending.filter((m) => m.id > pull.last_mutation_id);
 		addUnique(snap.rejections, pull.rejections);
+	}
+
+	async restartBase(): Promise<void> {
+		const snap = await this.ensure();
+		snap.base = emptyState();
+		snap.cursor = 0;
+		snap.dataId = null;
 	}
 
 	async dismissRejection(mutationId: number): Promise<void> {

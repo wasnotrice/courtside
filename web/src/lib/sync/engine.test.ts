@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SyncEngine } from './engine';
+import { PUSH_BATCH, SyncEngine } from './engine';
+import { HttpError } from './transport';
 import { MemoryStore } from './store';
 import { FakeServer } from './testing/fake-server';
-import { drill, player, run, setValue } from './testing/fixtures';
+import { drill, PROGRAM, player, run, setValue } from './testing/fixtures';
 import { resultKey } from './types';
 
 const engines: SyncEngine[] = [];
@@ -132,6 +133,96 @@ describe('a single device', () => {
 		expect(server.live().results.get(resultKey(runId, playerId))?.value).toBe(38);
 	});
 
+	it('sends a long queue in batches', async () => {
+		const server = new FakeServer();
+		const { engine, transport } = await device(server);
+		transport.online = false;
+		for (let i = 0; i < PUSH_BATCH * 2 + 10; i++) await engine.mutate(player({ name: `P${i}` }));
+
+		const sizes: number[] = [];
+		const push = transport.push;
+		transport.push = function (req) {
+			sizes.push(req.mutations.length);
+			return push.call(this, req);
+		};
+		transport.online = true;
+		await engine.sync();
+
+		expect(sizes).toEqual([PUSH_BATCH, PUSH_BATCH, 10]);
+		expect(engine.snapshot.pending).toHaveLength(0);
+		expect(server.live().players.size).toBe(PUSH_BATCH * 2 + 10);
+	});
+
+	it('a 401 keeps every pending change queued, with none rejected, and sends them later', async () => {
+		vi.useFakeTimers();
+		const server = new FakeServer();
+		const { engine, transport } = await device(server);
+		const push = transport.push;
+		transport.push = async () => {
+			throw new HttpError(401, 'Sign in again.');
+		};
+
+		await engine.mutate(player());
+		await engine.mutate(player({ name: 'Bea' }));
+		await engine.sync();
+		expect(engine.snapshot.pending).toHaveLength(2);
+		expect(engine.snapshot.rejections).toEqual([]);
+		expect(engine.snapshot.phase).toBe('retrying');
+		expect(engine.snapshot.lastError).toBe('Sign in again.');
+
+		transport.push = push;
+		await vi.advanceTimersByTimeAsync(5_000);
+		expect(engine.snapshot.pending).toHaveLength(0);
+		expect(server.live().players.size).toBe(2);
+	});
+
+	it('pulls from scratch when the server data is restored, keeping its queue', async () => {
+		const server = new FakeServer();
+		const { engine, transport } = await device(server);
+		const backup = server.backup();
+
+		const gone = player({ name: 'Gone' });
+		await engine.mutate(gone);
+		await engine.sync();
+		expect(engine.snapshot.view.players.has(gone.args.id)).toBe(true);
+
+		// Restoring the backup loses Gone. This phone queues another change offline.
+		server.restore(backup);
+		transport.online = false;
+		const kept = player({ name: 'Kept' });
+		await engine.mutate(kept);
+
+		transport.online = true;
+		await engine.sync();
+		await engine.sync();
+		expect(engine.snapshot.view.players.has(gone.args.id)).toBe(false);
+		expect(engine.snapshot.view.players.get(kept.args.id)?.name).toBe('Kept');
+		expect(server.live().players.has(kept.args.id)).toBe(true);
+		expect(engine.snapshot.pending).toHaveLength(0);
+	});
+
+	it('can add the next season offline and record a practice in it', async () => {
+		const server = new FakeServer();
+		const { engine, transport } = await device(server);
+		transport.online = false;
+
+		const season = crypto.randomUUID();
+		const d = drill();
+		for (const m of [
+			{ name: 'season.put' as const, args: { id: season, name: '2027–28', starts_on: '2027-08-01', ends_on: '2028-07-31' } },
+			d,
+			run(d.args.id, { date: '2027-09-01' })
+		]) {
+			expect(await engine.mutate(m)).toEqual({ ok: true });
+		}
+
+		transport.online = true;
+		await engine.sync();
+		expect(engine.snapshot.rejections).toEqual([]);
+		expect(server.live().seasons.has(season)).toBe(true);
+		expect(server.live().runs.size).toBe(1);
+	});
+
 	it('reset starts over as a new client with no local data', async () => {
 		const server = new FakeServer();
 		const { engine } = await device(server);
@@ -148,6 +239,53 @@ describe('a single device', () => {
 });
 
 describe('two devices', () => {
+	it('edits to different fields of the same row both survive', async () => {
+		const server = new FakeServer();
+		const a = await device(server);
+		const b = await device(server);
+		const d = drill();
+		await a.engine.mutate(d);
+		await a.engine.sync();
+		await b.engine.sync();
+
+		a.transport.online = false;
+		b.transport.online = false;
+		await a.engine.mutate({ name: 'drill.put', args: { id: d.args.id, name: 'FTs' } });
+		await b.engine.mutate({ name: 'drill.put', args: { id: d.args.id, default_setup: 30 } });
+
+		a.transport.online = true;
+		b.transport.online = true;
+		await a.engine.sync();
+		await b.engine.sync();
+		await a.engine.sync();
+
+		const expected = { ...d.args, name: 'FTs', default_setup: 30 };
+		expect(server.live().drills.get(d.args.id)).toEqual(expected);
+		expect(a.engine.snapshot.view.drills.get(d.args.id)).toEqual(expected);
+		expect(b.engine.snapshot.view.drills.get(d.args.id)).toEqual(expected);
+	});
+
+	it('known limit: a phone that syncs late overwrites a newer edit to the same field', async () => {
+		const server = new FakeServer();
+		const a = await device(server);
+		const b = await device(server);
+		const p = player();
+		await a.engine.mutate(p);
+		await a.engine.sync();
+		await b.engine.sync();
+
+		// A renames first but is offline; B renames later and syncs at once.
+		a.transport.online = false;
+		await a.engine.mutate({ name: 'player.put', args: { id: p.args.id, name: 'Older edit' } });
+		await b.engine.mutate({ name: 'player.put', args: { id: p.args.id, name: 'Newer edit' } });
+		await b.engine.sync();
+
+		// The last change to reach the server wins, not the last one made.
+		a.transport.online = true;
+		await a.engine.sync();
+		expect(server.live().players.get(p.args.id)).toEqual({ id: p.args.id, program_id: PROGRAM, name: 'Older edit' });
+	});
+
 	it('a poke makes the other device pull', async () => {
 		const server = new FakeServer();
 		const a = await device(server, { pokes: true });
