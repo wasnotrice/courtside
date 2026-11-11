@@ -24,6 +24,8 @@ const remember = (key: string, value: string) => {
 	}
 };
 
+export type GameMode = 'live' | 'plays' | 'box';
+
 export type Tab = 'today' | 'games' | 'roster' | 'history' | 'sync';
 
 export class AppState {
@@ -32,6 +34,8 @@ export class AppState {
 	runId = $state<string | null>(null);
 	/** The game whose live screen is open, on the Games tab. */
 	gameId = $state<string | null>(null);
+	/** Which of the game's screens is open: recording, the play-by-play, or the box score. */
+	gameMode = $state<GameMode>('live');
 	historyDrill = $state<string | null>(null);
 	toast = $state('');
 	private programId = $state(remembered('program'));
@@ -100,10 +104,13 @@ export class AppState {
 		window.scrollTo(0, 0);
 	}
 
-	openGame(gameId: string) {
-		if (!this.view.games.has(gameId)) return;
+	/** Opens a game: live while it's being played, otherwise its play-by-play. */
+	openGame(gameId: string, mode?: GameMode) {
+		const game = this.view.games.get(gameId);
+		if (!game) return;
 		this.tab = 'games';
 		this.gameId = gameId;
+		this.gameMode = mode ?? (game.status === 'live' ? 'live' : 'plays');
 		window.scrollTo(0, 0);
 	}
 

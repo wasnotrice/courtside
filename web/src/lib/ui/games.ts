@@ -2,8 +2,9 @@
 // Pure functions over the sync view.
 
 import { DEFAULT_RULES, rulesProblem, type Rules } from '$lib/sync/basketball';
-import type { Game, Season, State, Team } from '$lib/sync/types';
-import { POINTS, PRESETS, presetOf } from './basketball';
+import type { Game, Play, Season, State, Team } from '$lib/sync/types';
+import { rosterOf, seasonOf, type RosterRow } from './domain';
+import { ordinal, POINTS, PRESETS, presetOf } from './basketball';
 
 /** The program's games in a season (all seasons if none), newest first. */
 export function gamesOf(state: State, programId: string | undefined, season?: Season): Game[] {
@@ -42,10 +43,6 @@ export function rulesSummary(r: Rules): string {
 	return `${periods} · ${bonus} · out on ${r.foul_out_at} fouls`;
 }
 
-const ordinal = (n: number) => {
-	const s = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
-	return `${n}${s}`;
-};
 
 // --- the rules editor's draft ------------------------------------------------------------
 
@@ -147,4 +144,27 @@ export function mismatchText(m: { us: number; them: number }): string {
 	const part = (n: number, side: string) =>
 		n === 0 ? null : `${Math.abs(n)} point${Math.abs(n) === 1 ? '' : 's'} ${n > 0 ? 'missing' : 'extra'} for ${side}`;
 	return [part(m.us, 'us'), part(m.them, 'them')].filter(Boolean).join(', ');
+}
+
+// --- who can appear in a game -------------------------------------------------------------
+
+/**
+ * The players a game's screens offer: the team's roster for the game's season, by
+ * jersey, then anyone else credited in its plays or in `extra` (call-ups from the
+ * program), with no jersey.
+ */
+export function playersForGame(state: State, game: Game, plays: readonly Play[], extra: readonly string[] = []): RosterRow[] {
+	const programId = state.teams.get(game.team_id)?.program_id;
+	const out = rosterOf(state, programId, seasonOf(state, game.date)?.id, game.team_id);
+	const have = new Set(out.map((r) => r.player.id));
+	const add = (id: string | null) => {
+		const player = id && !have.has(id) ? state.players.get(id) : undefined;
+		if (player) {
+			out.push({ player, jersey: '', teamIds: [] });
+			have.add(player.id);
+		}
+	};
+	for (const p of plays) [p.player_id, p.assist_player_id, p.drawn_by_player_id].forEach(add);
+	extra.forEach(add);
+	return out;
 }

@@ -16,9 +16,8 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		type Bonus
 	} from './basketball';
 	import { getApp } from './context.svelte';
-	import { rosterOf, seasonOf, type RosterRow } from './domain';
-	import GameSheet from './GameSheet.svelte';
-	import { matchup } from './games';
+	import GameHeader from './GameHeader.svelte';
+	import { playersForGame } from './games';
 	import {
 		blockable,
 		currentPeriod,
@@ -34,7 +33,6 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	} from './live';
 	import RejectionNote from './RejectionNote.svelte';
 	import Sheet from './Sheet.svelte';
-	import StatusPill from './StatusPill.svelte';
 
 	let { gameId }: { gameId: string } = $props();
 
@@ -47,24 +45,10 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	const plays = $derived(playsOf(view, gameId));
 	const box = $derived(boxScore(plays));
 
-	// Who can be tapped: the team's roster for the game's season, then anyone else with a
-	// play in this game or picked from the program for it (call-ups).
+	// Who can be tapped: the team's roster, then anyone else with a play in this game or
+	// picked from the program for it (call-ups).
 	let added = $state<string[]>([]);
-	const rows = $derived.by(() => {
-		const programId = view.teams.get(game.team_id)?.program_id;
-		const out: RosterRow[] = rosterOf(view, programId, seasonOf(view, game.date)?.id, game.team_id);
-		const have = new Set(out.map((r) => r.player.id));
-		const extra = (id: string | null) => {
-			const player = id && !have.has(id) ? view.players.get(id) : undefined;
-			if (player) {
-				out.push({ player, jersey: '', teamIds: [] });
-				have.add(player.id);
-			}
-		};
-		for (const p of plays) [p.player_id, p.assist_player_id, p.drawn_by_player_id].forEach(extra);
-		added.forEach(extra);
-		return out;
-	});
+	const rows = $derived(playersForGame(view, game, plays, added));
 	const names = $derived(shortNames(rows));
 	const nameOf = (id: string) => names.get(id) ?? view.players.get(id)?.name ?? 'Player';
 
@@ -186,15 +170,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		})
 	);
 
-	/** Changes to games and plays still on this phone only. */
-	const unsynced = $derived(snap.pending.filter((m) => m.name.startsWith('play.') || m.name.startsWith('game.')).length);
-	const stranded = $derived(unsynced > 0 && (snap.offline || snap.phase === 'retrying'));
-	let sheet = $state<'details' | 'leave' | 'player' | null>(null);
-
-	function back() {
-		if (stranded) sheet = 'leave';
-		else app.gameId = null;
-	}
+	let sheet = $state<'player' | null>(null);
 
 	const others = $derived.by(() => {
 		const shown = new Set(rows.map((r) => r.player.id));
@@ -236,14 +212,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 
 <svelte:window onvisibilitychange={() => document.visibilityState === 'visible' && keepAwake()} />
 
-<header class="top live">
-	<div class="row"><button class="back" onclick={back}>‹ Games</button><StatusPill /></div>
-	<div class="row">
-		<button class="title" onclick={() => (sheet = 'details')}>
-			<h1>{matchup(game)}</h1>
-		</button>
-		<span class="score" aria-label="Score">{box.score.us}–{box.score.them}</span>
-	</div>
+<GameHeader {game} score={box.score}>
 	<div class="row">
 		<div class="period" role="group" aria-label="Period">
 			<button aria-label="Previous period" disabled={period <= 1} onclick={() => period--}>‹</button>
@@ -255,7 +224,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 			· them {them.fouls}{#if them.bonus !== 'none'}<span class="bonus">{BONUS_LABEL[them.bonus]}</span>{/if}
 		</span>
 	</div>
-</header>
+</GameHeader>
 
 <main class="live">
 	{#each rejections as r (r.mutation_id)}<RejectionNote rejection={r} standalone />{/each}
@@ -372,18 +341,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	{/if}
 </main>
 
-{#if sheet === 'details'}
-	<GameSheet {game} onclose={() => (sheet = null)} />
-{:else if sheet === 'leave'}
-	<Sheet onclose={() => (sheet = null)}>
-		<h2>Not synced yet</h2>
-		<p>
-			{unsynced === 1 ? '1 change is' : `${unsynced} changes are`} saved on this phone but {unsynced === 1 ? "hasn't" : "haven't"}
-			reached the server yet. Get signal before you close the app or hand the phone back.
-		</p>
-		<button class="secondary wide" onclick={() => (app.gameId = null)}>Leave the game screen</button>
-	</Sheet>
-{:else if sheet === 'player'}
+{#if sheet === 'player'}
 	<Sheet onclose={() => (sheet = null)}>
 		<h2>Another player</h2>
 		<p class="hint">Players in the program who aren't on this team's roster.</p>
@@ -396,29 +354,6 @@ plays below; a skippable follow-up question after some plays; the last few plays
 {/if}
 
 <style>
-	header.live {
-		gap: 6px;
-	}
-	.title {
-		background: none;
-		border: 0;
-		padding: 0;
-		text-align: left;
-		min-width: 0;
-	}
-	.title h1 {
-		font-size: 28px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.score {
-		font-family: var(--display);
-		font-weight: 700;
-		font-size: 34px;
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
-	}
 	.period {
 		display: flex;
 		align-items: center;
@@ -427,7 +362,8 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	.period b {
 		font-family: var(--display);
 		font-size: 22px;
-		min-width: 44px;
+		min-width: 92px;
+		white-space: nowrap;
 		text-align: center;
 	}
 	.period button {
@@ -576,7 +512,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	}
 	.recent li {
 		display: grid;
-		grid-template-columns: 36px 1fr auto;
+		grid-template-columns: auto 1fr auto;
 		align-items: center;
 		gap: 8px;
 		padding: 6px 6px 6px 12px;

@@ -70,13 +70,20 @@ const same = (a: Rules, b: Rules) => (Object.keys(a) as (keyof Rules)[]).every((
 /** The preset these rules match, or null for custom rules. */
 export const presetOf = (rules: Rules): Preset | null => PRESETS.find((p) => same(p.rules, rules)) ?? null;
 
-/** "Q2", "H1", "OT", "2OT". */
+/** "2nd quarter", "1st half", "Overtime", "2nd overtime". */
 export function periodLabel(rules: Rules, period: number): string {
 	if (period > rules.periods) {
 		const ot = period - rules.periods;
-		return ot === 1 ? 'OT' : `${ot}OT`;
+		return ot === 1 ? 'Overtime' : `${ordinal(ot)} overtime`;
 	}
-	return rules.periods === 2 ? `H${period}` : `Q${period}`;
+	return `${ordinal(period)} ${rules.periods === 2 ? 'half' : 'quarter'}`;
+}
+
+/** 1st, 2nd, 3rd, 4th, 11th, 21st. */
+export function ordinal(n: number): string {
+	const teen = n % 100 >= 11 && n % 100 <= 13;
+	const suffix = teen ? 'th' : (({ 1: 'st', 2: 'nd', 3: 'rd' }) as Record<number, string>)[n % 10] ?? 'th';
+	return `${n}${suffix}`;
 }
 
 // --- order and position keys ----------------------------------------------------------

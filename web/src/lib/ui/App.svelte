@@ -1,9 +1,11 @@
 <script lang="ts">
 	import type { Sync } from '$lib/sync/index.svelte';
 	import { AppState, setApp } from './context.svelte';
+	import BoxView from './BoxView.svelte';
 	import EntryView from './EntryView.svelte';
 	import GamesView from './GamesView.svelte';
 	import LiveView from './LiveView.svelte';
+	import PlaysView from './PlaysView.svelte';
 	import HistoryView from './HistoryView.svelte';
 	import PracticeView from './PracticeView.svelte';
 	import ProgramSetup from './ProgramSetup.svelte';
@@ -34,7 +36,13 @@
 		{/key}
 	{:else if app.tab === 'games' && app.gameId && app.view.games.has(app.gameId)}
 		{#key app.gameId}
-			<LiveView gameId={app.gameId} />
+			{#if app.gameMode === 'live'}
+				<LiveView gameId={app.gameId} />
+			{:else if app.gameMode === 'plays'}
+				<PlaysView gameId={app.gameId} />
+			{:else}
+				<BoxView gameId={app.gameId} />
+			{/if}
 		{/key}
 	{:else if app.tab === 'games'}
 		<GamesView />

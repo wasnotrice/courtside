@@ -48,11 +48,12 @@ describe('presets', () => {
 		expect(presetOf({ ...DEFAULT_RULES, period_minutes: 7 })).toBeNull();
 	});
 
-	it('label periods as quarters, halves and overtimes', () => {
-		expect(periodLabel(nfhs, 2)).toBe('Q2');
-		expect(periodLabel(men, 2)).toBe('H2');
-		expect(periodLabel(nfhs, 5)).toBe('OT');
-		expect(periodLabel(men, 4)).toBe('2OT');
+	it('name periods as quarters, halves and overtimes', () => {
+		expect(periodLabel(nfhs, 2)).toBe('2nd quarter');
+		expect(periodLabel(nfhs, 3)).toBe('3rd quarter');
+		expect(periodLabel(men, 1)).toBe('1st half');
+		expect(periodLabel(nfhs, 5)).toBe('Overtime');
+		expect(periodLabel(men, 4)).toBe('2nd overtime');
 	});
 });
 
