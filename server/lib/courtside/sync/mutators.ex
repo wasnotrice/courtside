@@ -550,7 +550,7 @@ defmodule Courtside.Sync.Mutators do
   # same message from the phone and the server.
   defp put_play(args, ctx) do
     with {:ok, existing} <- load_for_put(Play, args["id"], ctx),
-         :ok <- check_play_live(existing),
+         :ok <- check_play_live(existing, args),
          {:ok, game} <-
            fetch_live(
              Game,
@@ -575,8 +575,14 @@ defmodule Courtside.Sync.Mutators do
     end
   end
 
-  defp check_play_live(%Play{deleted: true}), do: {:error, "That play was deleted."}
-  defp check_play_live(_existing), do: :ok
+  defp check_play_live(%Play{deleted: true}, _args), do: {:error, "That play was deleted."}
+
+  # An edit (no game_id) to a play that doesn't exist: the phone never sees deleted
+  # plays, so this is how one reaches the server.
+  defp check_play_live(nil, args) when not is_map_key(args, "game_id"),
+    do: {:error, "That play was deleted."}
+
+  defp check_play_live(_existing, _args), do: :ok
 
   # A foul is personal unless it says otherwise.
   defp default_foul_type(cs) do

@@ -32,7 +32,10 @@ type Keyed = Record<string, unknown> & { key: string };
 
 /** Clears the base and the cursor for a fresh pull, keeping the queue. */
 async function dropBase(tx: Transaction) {
-	for (const t of tx.storeNames) {
+	// Only the stores that exist at this step: upgrading across several versions runs
+	// each version's upgrade before later versions' stores are created.
+	const existing = Array.from(tx.idbtrans.objectStoreNames);
+	for (const t of existing) {
 		if (!['pending', 'rejections', 'meta'].includes(t)) await tx.table(t).clear();
 	}
 	await tx.table('meta').bulkDelete(['cursor', 'data_id']);
@@ -62,12 +65,21 @@ class CourtsideDB extends Dexie {
 				drills: null,
 				runs: null,
 				results: null,
-				...Object.fromEntries(TABLES.map((t) => [`base_${t}`, 'key'])),
+				// Written out, not taken from TABLES: a version's schema must never change.
+				...Object.fromEntries(
+					['programs', 'seasons', 'teams', 'players', 'roster_entries', 'drills', 'runs', 'results'].map((t) => [
+						`base_${t}`,
+						'key'
+					])
+				),
 				pending: 'id',
 				rejections: 'mutation_id',
 				meta: 'key'
 			})
 			.upgrade(dropBase);
+		// Games and plays. The base is pulled again from scratch: games the server already
+		// had sit below this phone's cursor and would otherwise never arrive.
+		this.version(3).stores({ base_games: 'key', base_plays: 'key' }).upgrade(dropBase);
 	}
 
 	base(table: BaseTable): EntityTable<Keyed, 'key'> {

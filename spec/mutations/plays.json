@@ -1047,6 +1047,19 @@
           ]
         }
       }
+    },
+    {
+      "name": "an edit to a play that doesn't exist is refused as deleted",
+      "mutation": {
+        "name": "play.put",
+        "args": {
+          "id": "d0000000-0000-4000-8000-0000000000d9",
+          "player_id": "22222222-2222-4222-8222-222222222222"
+        }
+      },
+      "expect": {
+        "rejected": "That play was deleted."
+      }
     }
   ]
 }

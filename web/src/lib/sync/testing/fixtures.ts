@@ -1,4 +1,4 @@
-import type { Drill, MutationInput, MutationName, Player, Run } from '../types';
+import type { Drill, Game, MutationInput, MutationName, Play, Player, Run } from '../types';
 
 type Of<N extends MutationName> = Extract<MutationInput, { name: N }>;
 
@@ -7,11 +7,35 @@ export const id = () => crypto.randomUUID();
 /** The program and season every fixture belongs to. FakeServer starts with both. */
 export const PROGRAM = 'b0000000-0000-4000-8000-000000000001';
 export const SEASON = 'f0000000-0000-4000-8000-000000000001';
+export const TEAM = 'e0000000-0000-4000-8000-000000000001';
 
 export const structure = (): MutationInput[] => [
 	{ name: 'program.put', args: { id: PROGRAM, name: "Girls' basketball", sport: 'basketball' } },
-	{ name: 'season.put', args: { id: SEASON, name: '2026–27', starts_on: '2026-08-01', ends_on: '2027-07-31' } }
+	{ name: 'season.put', args: { id: SEASON, name: '2026–27', starts_on: '2026-08-01', ends_on: '2027-07-31' } },
+	{ name: 'team.put', args: { id: TEAM, program_id: PROGRAM, name: 'Varsity' } }
 ];
+
+export const game = (over: Partial<Game> = {}): Of<'game.put'> => ({
+	name: 'game.put',
+	args: { id: id(), team_id: TEAM, date: '2026-11-20', opponent: 'Lincoln', ...over }
+});
+
+let positions = 0;
+/** A play for `gameId`, positioned after every earlier fixture play. */
+export const play = (gameId: string, over: Partial<Play> = {}): Of<'play.put'> => ({
+	name: 'play.put',
+	args: {
+		id: id(),
+		game_id: gameId,
+		side: 'us',
+		player_id: null,
+		stat: 'dreb',
+		period: 1,
+		position: `p${String(++positions).padStart(6, '0')}`,
+		recorded_at: Date.now(),
+		...over
+	}
+});
 
 export const player = (over: Partial<Player> = {}): Of<'player.put'> => ({
 	name: 'player.put',

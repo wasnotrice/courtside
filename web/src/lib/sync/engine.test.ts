@@ -1,9 +1,11 @@
+import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PUSH_BATCH, SyncEngine } from './engine';
 import { HttpError } from './transport';
 import { MemoryStore } from './store';
 import { FakeServer } from './testing/fake-server';
-import { drill, PROGRAM, player, run, setValue } from './testing/fixtures';
+import { drill, game, play, PROGRAM, player, run, setValue } from './testing/fixtures';
+import { DexieStore } from './dexie-store';
 import { resultKey } from './types';
 
 const engines: SyncEngine[] = [];
@@ -423,5 +425,112 @@ describe('two devices', () => {
 		await b.engine.dismissRejection(rejection.mutation_id);
 		await b.engine.sync();
 		expect(b.engine.snapshot.rejections).toEqual([]);
+	});
+});
+
+describe('games', () => {
+	it('a film correction on one phone reaches another that was offline, and both keep their changes', async () => {
+		const server = new FakeServer();
+		const film = await device(server);
+		const bench = await device(server);
+		const g = game();
+		const p = player();
+		const shot = play(g.args.id, { player_id: p.args.id, stat: 'fg2_made' });
+		for (const m of [g, p, shot]) await bench.engine.mutate(m);
+		await bench.engine.sync();
+		await film.engine.sync();
+
+		// The bench phone goes offline and records more; film review fixes the shot's clock.
+		bench.transport.online = false;
+		const rebound = play(g.args.id, { side: 'them', stat: 'oreb' });
+		await bench.engine.mutate(rebound);
+		await film.engine.mutate({ name: 'play.put', args: { id: shot.args.id, clock: 412, video_at: 1830.5 } });
+		await film.engine.sync();
+
+		bench.transport.online = true;
+		await bench.engine.sync();
+		await film.engine.sync();
+
+		for (const d of [film, bench]) {
+			expect(d.engine.snapshot.view.plays.get(shot.args.id)).toMatchObject({ clock: 412, video_at: 1830.5 });
+			expect(d.engine.snapshot.view.plays.has(rebound.args.id)).toBe(true);
+		}
+	});
+
+	it('an edit to a play another phone deleted is rejected, and the play stays gone', async () => {
+		const server = new FakeServer();
+		const a = await device(server);
+		const b = await device(server);
+		const g = game();
+		const p = play(g.args.id);
+		for (const m of [g, p]) await a.engine.mutate(m);
+		await a.engine.sync();
+		await b.engine.sync();
+
+		b.transport.online = false;
+		await b.engine.mutate({ name: 'play.put', args: { id: p.args.id, period: 2 } });
+		await a.engine.mutate({ name: 'play.delete', args: { id: p.args.id } });
+		await a.engine.sync();
+
+		b.transport.online = true;
+		await b.engine.sync();
+		expect(b.engine.snapshot.rejections.map((r) => r.reason)).toEqual(['That play was deleted.']);
+		expect(b.engine.snapshot.view.plays.has(p.args.id)).toBe(false);
+		expect(server.live().plays.has(p.args.id)).toBe(false);
+	});
+
+	it('plays recorded into a game another phone deleted show as "won\'t sync", then rejected', async () => {
+		const server = new FakeServer();
+		const a = await device(server);
+		const b = await device(server);
+		const g = game();
+		await a.engine.mutate(g);
+		await a.engine.sync();
+		await b.engine.sync();
+
+		b.transport.online = false;
+		const late = play(g.args.id);
+		await b.engine.mutate(late);
+		await a.engine.mutate({ name: 'game.delete', args: { id: g.args.id } });
+		await a.engine.sync();
+
+		// B pulls the delete before its push lands: its queued play no longer applies.
+		const push = b.transport.push;
+		b.transport.push = async () => {
+			throw new TypeError('Failed to fetch');
+		};
+		b.transport.online = true;
+		await b.engine.sync();
+		expect([...b.engine.snapshot.skipped.values()]).toEqual(['That game was deleted.']);
+
+		b.transport.push = push;
+		await b.engine.sync();
+		expect(b.engine.snapshot.rejections.map((r) => r.reason)).toEqual(['That game was deleted.']);
+		expect(b.engine.snapshot.pending).toHaveLength(0);
+	});
+
+	it('closing the app mid-game loses no play', async () => {
+		const server = new FakeServer();
+		const name = `game-${crypto.randomUUID()}`;
+		const transport = server.transport();
+		let engine = await SyncEngine.open({ store: new DexieStore(name), transport });
+		await engine.sync();
+		transport.online = false;
+
+		const g = game();
+		await engine.mutate(g);
+		const plays = Array.from({ length: 40 }, () => play(g.args.id));
+		for (const p of plays) expect(await engine.mutate(p)).toEqual({ ok: true });
+		engine.stop();
+
+		// "Reopen the app": a new engine on the same IndexedDB database.
+		engine = await SyncEngine.open({ store: new DexieStore(name), transport });
+		engine.stop();
+		expect(engine.snapshot.pending).toHaveLength(41);
+		expect(engine.snapshot.view.plays.size).toBe(40);
+
+		transport.online = true;
+		await engine.sync();
+		expect(server.live().plays.size).toBe(40);
 	});
 });

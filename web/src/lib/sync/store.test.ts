@@ -145,6 +145,7 @@ describe('DexieStore schema upgrades', () => {
 		]);
 		old.close();
 
+		// Opening upgrades through every later version (2, then 3).
 		const store = new DexieStore('upgrade-test');
 		const snap = await store.load();
 
@@ -152,5 +153,38 @@ describe('DexieStore schema upgrades', () => {
 		expect(snap).toMatchObject({ clientId: 'old-client', cursor: 0, dataId: null });
 		expect(snap.base.players.size).toBe(0);
 		expect((await store.enqueue(player())).id).toBe(3);
+	});
+});
+
+describe('DexieStore upgrade to games (version 3)', () => {
+	it('adds games and plays, keeps the queue, and starts the base over', async () => {
+		const v2 = new Dexie('courtside-v3-test');
+		v2.version(2).stores({
+			...Object.fromEntries(
+				['programs', 'seasons', 'teams', 'players', 'roster_entries', 'drills', 'runs', 'results'].map((t) => [
+					`base_${t}`,
+					'key'
+				])
+			),
+			pending: 'id',
+			rejections: 'mutation_id',
+			meta: 'key'
+		});
+		await v2.table('base_players').put({ key: 'p1', id: 'p1', program_id: 'g', name: 'Ana' });
+		await v2.table('pending').put({ id: 1, name: 'player.put', args: { id: 'p1', name: 'Ana B' } });
+		await v2.table('meta').bulkPut([
+			{ key: 'client_id', value: 'v2-client' },
+			{ key: 'cursor', value: 99 },
+			{ key: 'next_mutation_id', value: 2 }
+		]);
+		v2.close();
+
+		const store = new DexieStore('v3-test');
+		const snap = await store.load();
+		expect(snap).toMatchObject({ clientId: 'v2-client', cursor: 0 });
+		expect(snap.pending.map((m) => m.id)).toEqual([1]);
+		expect(snap.base.players.size).toBe(0);
+		expect(snap.base.games.size).toBe(0);
+		expect(snap.base.plays.size).toBe(0);
 	});
 });

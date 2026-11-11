@@ -8,15 +8,18 @@
 // The server is authoritative. When the two disagree, the server's rejection
 // wins and shows up in the sync inspector.
 
+import { DEFAULT_RULES, FOUL_TYPES, MADE_FIELD_GOALS, periodSeconds, rulesProblem, STATS } from './basketball';
 import {
 	KINDS,
 	SPORTS,
 	resultKey,
 	type Drill,
+	type Game,
 	type Kind,
 	type MutationArgs,
 	type MutationInput,
 	type MutationName,
+	type Play,
 	type Player,
 	type Program,
 	type Result,
@@ -75,8 +78,9 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 		const program = liveProgram(state, m.program_id);
 		const name = checkName(m.name);
 		unchangedProgram(existing, program, 'team');
+		if (args.default_rules !== undefined && args.default_rules !== null) checkRules(args.default_rules);
 
-		const team: Team = { id, program_id: program.id, name };
+		const team: Team = { id, program_id: program.id, name, default_rules: m.default_rules ?? null };
 		return { ...state, teams: put(state.teams, id, team) };
 	},
 
@@ -229,8 +233,144 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 		const results = new Map(state.results);
 		results.delete(key);
 		return { ...state, results };
+	},
+
+	'game.put': (state, args) => {
+		const id = uuid(args.id);
+		const existing = state.games.get(id);
+		const m = merged(existing, args);
+		const team = (m.team_id && state.teams.get(m.team_id)) || fail('That team no longer exists.');
+		if (existing && existing.team_id !== team.id) fail("Team can't change after the game is created");
+
+		// A new game copies its team's rules, or the default, unless it brings its own.
+		const rules = existing ? m.rules : (m.rules ?? team.default_rules ?? DEFAULT_RULES);
+		const opponent = typeof m.opponent === 'string' ? m.opponent.trim() : '';
+		if (m.date === undefined || m.date === null) fail("Date can't be blank");
+		if (!isDate(m.date)) fail('Date is invalid');
+		if (!opponent) fail("Opponent can't be blank");
+		if (opponent.length > 100) fail('Opponent should be at most 100 character(s)');
+		if (!rules) fail("Rules can't be blank");
+		const home_away = m.home_away ?? 'home';
+		if (!['home', 'away', 'neutral'].includes(home_away)) fail('Home away must be home, away or neutral');
+		const status = m.status ?? 'live';
+		if (!['live', 'final', 'reviewed'].includes(status)) fail('Status must be live, final or reviewed');
+		checkScore(m.official_us, 'Official us');
+		checkScore(m.official_them, 'Official them');
+		if (!existing || args.rules !== undefined) checkRules(rules);
+		if (!seasonOf(state, m.date!)) fail('No season includes that date.');
+
+		const game: Game = {
+			id,
+			team_id: team.id,
+			date: m.date!,
+			opponent,
+			home_away,
+			status,
+			rules: rules!,
+			official_us: m.official_us ?? null,
+			official_them: m.official_them ?? null
+		};
+		return { ...state, games: put(state.games, id, game) };
+	},
+
+	'game.delete': (state, args) => {
+		if (!state.games.has(args.id)) return state;
+
+		const games = new Map(state.games);
+		games.delete(args.id);
+		const plays = new Map(state.plays);
+		for (const p of state.plays.values()) if (p.game_id === args.id) plays.delete(p.id);
+		return { ...state, games, plays };
+	},
+
+	// The checks run in the server's order (mutators.ex, put_play), so a play with one
+	// problem gets the same message on both sides.
+	'play.put': (state, args) => {
+		const id = uuid(args.id);
+		const existing = state.plays.get(id);
+		// An edit to a play this phone no longer has: another phone deleted it.
+		if (!existing && !('game_id' in args)) fail('That play was deleted.');
+		const m = merged(existing, args);
+		const game = (m.game_id && state.games.get(m.game_id)) || fail('That game was deleted.');
+		if (existing && existing.game_id !== game.id) fail("Game can't change after the play is recorded");
+
+		const foul_type = m.stat === 'foul' && m.foul_type == null ? 'personal' : (m.foul_type ?? null);
+		if (m.side == null) fail("Side can't be blank");
+		if (m.stat == null) fail("Stat can't be blank");
+		if (m.period == null) fail("Period can't be blank");
+		if (typeof m.position !== 'string' || !m.position.trim()) fail("Position can't be blank");
+		if (m.recorded_at == null) fail("Recorded at can't be blank");
+		if (!['us', 'them'].includes(m.side!)) fail('Side must be us or them');
+		if (!STATS.includes(m.stat!)) fail('Stat is invalid');
+		if (!Number.isInteger(m.period)) fail('Period is invalid');
+		if (m.period! <= 0) fail('Period must be greater than 0');
+		if (m.clock != null && !Number.isInteger(m.clock)) fail('Clock is invalid');
+		if (m.clock != null && m.clock < 0) fail('Clock must be greater than or equal to 0');
+		if (m.video_at != null && !(typeof m.video_at === 'number' && Number.isFinite(m.video_at))) fail('Video at is invalid');
+		if (m.video_at != null && m.video_at < 0) fail('Video at must be greater than or equal to 0');
+		if (!Number.isInteger(m.recorded_at)) fail('Recorded at is invalid');
+
+		const play: Play = {
+			id,
+			game_id: game.id,
+			side: m.side!,
+			player_id: m.player_id ?? null,
+			stat: m.stat!,
+			foul_type,
+			assist_player_id: m.assist_player_id ?? null,
+			drawn_by_player_id: m.drawn_by_player_id ?? null,
+			period: m.period!,
+			clock: m.clock ?? null,
+			video_at: m.video_at ?? null,
+			position: m.position!,
+			recorded_at: m.recorded_at!
+		};
+
+		if (play.side === 'them' && play.player_id !== null) fail("The other team's plays can't have a player.");
+		if (play.assist_player_id !== null && !(play.side === 'us' && MADE_FIELD_GOALS.includes(play.stat))) {
+			fail('Only made shots can have an assist.');
+		}
+		if (play.assist_player_id !== null && play.assist_player_id === play.player_id) {
+			fail("A player can't assist their own shot.");
+		}
+		if (play.foul_type !== null && play.stat !== 'foul') fail('Only fouls have a foul type.');
+		if (play.foul_type !== null && !FOUL_TYPES.includes(play.foul_type)) fail('Foul type is invalid');
+		if (play.drawn_by_player_id !== null && !(play.side === 'them' && play.stat === 'foul')) {
+			fail("Only the other team's fouls can be drawn.");
+		}
+
+		const team = state.teams.get(game.team_id);
+		for (const pid of [play.player_id, play.assist_player_id, play.drawn_by_player_id]) {
+			if (pid === null) continue;
+			const player = livePlayer(state, pid);
+			if (player.program_id !== team?.program_id) fail('That player is in a different program.');
+		}
+		if (play.clock !== null && play.clock > periodSeconds(game.rules, play.period)) {
+			fail("Clock is more than the period's length.");
+		}
+
+		return { ...state, plays: put(state.plays, id, play) };
+	},
+
+	'play.delete': (state, args) => {
+		if (!state.plays.has(args.id)) return state;
+
+		const plays = new Map(state.plays);
+		plays.delete(args.id);
+		return { ...state, plays };
 	}
 };
+
+function checkRules(rules: unknown) {
+	const problem = rulesProblem(rules);
+	if (problem) fail(problem);
+}
+
+function checkScore(n: unknown, label: string) {
+	if (n === null || n === undefined) return;
+	if (!Number.isInteger(n)) fail(`${label} is invalid`);
+	if ((n as number) < 0) fail(`${label} must be greater than or equal to 0`);
+}
 
 /**
  * The arguments each mutation accepts. Anything else is refused rather than
@@ -240,7 +380,7 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 const FIELDS: { [N in MutationName]: readonly (keyof MutationArgs[N])[] } = {
 	'program.put': ['id', 'name', 'sport'],
 	'season.put': ['id', 'name', 'starts_on', 'ends_on'],
-	'team.put': ['id', 'program_id', 'name'],
+	'team.put': ['id', 'program_id', 'name', 'default_rules'],
 	'player.put': ['id', 'program_id', 'name'],
 	'roster.put': ['id', 'team_id', 'season_id', 'player_id', 'jersey'],
 	'roster.remove': ['id'],
@@ -250,7 +390,25 @@ const FIELDS: { [N in MutationName]: readonly (keyof MutationArgs[N])[] } = {
 	'run.delete': ['id'],
 	'result.set_value': ['drill_run_id', 'player_id', 'value'],
 	'result.set_setup': ['drill_run_id', 'player_id', 'setup'],
-	'result.clear': ['drill_run_id', 'player_id']
+	'result.clear': ['drill_run_id', 'player_id'],
+	'game.put': ['id', 'team_id', 'date', 'opponent', 'home_away', 'status', 'rules', 'official_us', 'official_them'],
+	'game.delete': ['id'],
+	'play.put': [
+		'id',
+		'game_id',
+		'side',
+		'player_id',
+		'stat',
+		'foul_type',
+		'assist_player_id',
+		'drawn_by_player_id',
+		'period',
+		'clock',
+		'video_at',
+		'position',
+		'recorded_at'
+	],
+	'play.delete': ['id']
 };
 
 /** Applies one mutation, or throws MutationError with the reason it doesn't apply. */

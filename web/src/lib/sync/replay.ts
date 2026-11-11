@@ -42,7 +42,9 @@ export const TABLES = [
 	'roster_entries',
 	'drills',
 	'runs',
-	'results'
+	'results',
+	'games',
+	'plays'
 ] as const satisfies readonly (keyof State)[];
 
 /** A row's key in its table. Results are addressed by (run, player); everything else by id. */

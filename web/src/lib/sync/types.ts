@@ -2,6 +2,10 @@
 // (see server/lib/courtside/sync.ex, to_wire/1), minus `version` and `deleted`,
 // which only matter while applying a pull.
 
+import type { FoulType, Rules, Stat } from './basketball';
+
+export type { FoulType, Rules, Stat } from './basketball';
+
 export type Kind = 'makes' | 'count' | 'time';
 export const KINDS: readonly Kind[] = ['makes', 'count', 'time'];
 
@@ -28,6 +32,8 @@ export interface Team {
 	id: string;
 	program_id: string;
 	name: string;
+	/** Copied into each new game; null means the default rules. */
+	default_rules: Rules | null;
 }
 
 export interface Player {
@@ -71,6 +77,48 @@ export interface Result {
 	setup: number | null;
 }
 
+/** One game played by a team against an opponent on a date. Keeps its own rules. */
+export interface Game {
+	id: string;
+	team_id: string;
+	/** YYYY-MM-DD; must fall in a season. */
+	date: string;
+	opponent: string;
+	home_away: 'home' | 'away' | 'neutral';
+	status: 'live' | 'final' | 'reviewed';
+	rules: Rules;
+	/** The scorebook's final score, entered when the game is final. */
+	official_us: number | null;
+	official_them: number | null;
+}
+
+/**
+ * One stat credited during a game: to a player, to the team (no player) or to the
+ * opponent (side 'them', never a player).
+ */
+export interface Play {
+	id: string;
+	game_id: string;
+	side: 'us' | 'them';
+	player_id: string | null;
+	stat: Stat;
+	/** On fouls only; a foul is 'personal' unless it says otherwise. */
+	foul_type: FoulType | null;
+	/** On our made field goals only. */
+	assist_player_id: string | null;
+	/** Our player who was fouled, on the other team's fouls only. */
+	drawn_by_player_id: string | null;
+	period: number;
+	/** Seconds left in the period. */
+	clock: number | null;
+	/** Seconds into the film. */
+	video_at: number | null;
+	/** Sorts the play-by-play: a key between its neighbors' keys. */
+	position: string;
+	/** When the device recorded it, in milliseconds since 1970. Breaks ties. */
+	recorded_at: number;
+}
+
 /** The data a client holds: either the server's (the base) or base + pending (the view). */
 export interface State {
 	programs: ReadonlyMap<string, Program>;
@@ -82,6 +130,8 @@ export interface State {
 	runs: ReadonlyMap<string, Run>;
 	/** Keyed by resultKey(run, player). */
 	results: ReadonlyMap<string, Result>;
+	games: ReadonlyMap<string, Game>;
+	plays: ReadonlyMap<string, Play>;
 }
 
 export const resultKey = (drillRunId: string, playerId: string) => `${drillRunId}/${playerId}`;
@@ -94,7 +144,9 @@ export const emptyState = (): State => ({
 	roster_entries: new Map(),
 	drills: new Map(),
 	runs: new Map(),
-	results: new Map()
+	results: new Map(),
+	games: new Map(),
+	plays: new Map()
 });
 
 // --- mutations ---------------------------------------------------------------
@@ -119,6 +171,10 @@ export interface MutationArgs {
 	'result.set_value': { drill_run_id: string; player_id: string; value: number };
 	'result.set_setup': { drill_run_id: string; player_id: string; setup: number | null };
 	'result.clear': { drill_run_id: string; player_id: string };
+	'game.put': Put<Game>;
+	'game.delete': { id: string };
+	'play.put': Put<Play>;
+	'play.delete': { id: string };
 }
 
 export type MutationName = keyof MutationArgs;
@@ -168,5 +224,7 @@ export interface PullResponse {
 		drills: Synced<Drill>[];
 		runs: Synced<Run>[];
 		results: Synced<Result>[];
+		games: Synced<Game>[];
+		plays: Synced<Play>[];
 	};
 }
