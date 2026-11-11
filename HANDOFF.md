@@ -130,18 +130,22 @@ Decisions made along the way:
 
 ## Next steps
 
-1. Optional: run the two-client edge cases against the real Phoenix server, not only the
-   fake (for example, Vitest with `HttpTransport` against `MIX_ENV=test mix phx.server`).
-2. The known follow-ups below.
+The plan is [`docs/games-plan.md`](docs/games-plan.md). **Phase 1 is done**
+(organizations, programs, teams, seasons and rosters; edits that send only their
+changed fields; offline safety; sync hardening; shared mutation cases). Next are
+the two spikes (Tauri on iOS, LiveStore for games), then phase 2 (games).
+
+Phase 1 changed the step boundaries a little: the client mutators moved with the
+server's in step 1, so the shared cases in `spec/mutations/` pass on both sides at
+every commit.
 
 Known follow-ups, not urgent:
 - Several tabs open on one device: share state through a `BroadcastChannel` or a lock.
-- Partial sync (a `team_id` and per-team pulls).
 - Cleaning up old tombstones.
-- Auth.
 - Showing a "last edited by" when two coaches disagree on a value.
-- `Courtside.Practice` nests four schema modules in one file, which the Phoenix
-  `AGENTS.md` advises against.
+- The season picker is an unstyled native `<select>`.
+- On the entry screen with a team filter, the summary line still covers the whole
+  drill run.
 
 ## How to run
 
