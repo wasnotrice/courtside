@@ -1,11 +1,22 @@
 {
   "given": {
+    "programs": [
+      {
+        "id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Girls' basketball",
+        "sport": "basketball"
+      },
+      {
+        "id": "b2222222-2222-4222-8222-222222222222",
+        "name": "Boys' basketball",
+        "sport": "basketball"
+      }
+    ],
     "players": [
       {
         "id": "11111111-1111-4111-8111-111111111111",
-        "name": "Ana",
-        "jersey": "4",
-        "active": true
+        "program_id": "b1111111-1111-4111-8111-111111111111",
+        "name": "Ana"
       }
     ]
   },
@@ -16,9 +27,8 @@
         "name": "player.put",
         "args": {
           "id": "22222222-2222-4222-8222-222222222222",
-          "name": "Ben",
-          "jersey": "12",
-          "active": true
+          "program_id": "b1111111-1111-4111-8111-111111111111",
+          "name": "Ben"
         }
       },
       "expect": {
@@ -26,15 +36,13 @@
           "players": [
             {
               "id": "11111111-1111-4111-8111-111111111111",
-              "name": "Ana",
-              "jersey": "4",
-              "active": true
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Ana"
             },
             {
               "id": "22222222-2222-4222-8222-222222222222",
-              "name": "Ben",
-              "jersey": "12",
-              "active": true
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Ben"
             }
           ]
         }
@@ -46,9 +54,8 @@
         "name": "player.put",
         "args": {
           "id": "22222222-2222-4222-8222-222222222222",
-          "name": "  Ben  ",
-          "jersey": "12",
-          "active": true
+          "program_id": "b1111111-1111-4111-8111-111111111111",
+          "name": "  Ben  "
         }
       },
       "expect": {
@@ -56,15 +63,13 @@
           "players": [
             {
               "id": "11111111-1111-4111-8111-111111111111",
-              "name": "Ana",
-              "jersey": "4",
-              "active": true
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Ana"
             },
             {
               "id": "22222222-2222-4222-8222-222222222222",
-              "name": "Ben",
-              "jersey": "12",
-              "active": true
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Ben"
             }
           ]
         }
@@ -76,9 +81,8 @@
         "name": "player.put",
         "args": {
           "id": "22222222-2222-4222-8222-222222222222",
-          "name": "   ",
-          "jersey": "12",
-          "active": true
+          "program_id": "b1111111-1111-4111-8111-111111111111",
+          "name": "   "
         }
       },
       "expect": {
@@ -91,9 +95,8 @@
         "name": "player.put",
         "args": {
           "id": "22222222-2222-4222-8222-222222222222",
-          "name": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-          "jersey": "12",
-          "active": true
+          "program_id": "b1111111-1111-4111-8111-111111111111",
+          "name": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
         }
       },
       "expect": {
@@ -101,123 +104,26 @@
       }
     },
     {
-      "name": "a new player without jersey or active gets the defaults",
+      "name": "an unknown program is refused",
       "mutation": {
         "name": "player.put",
         "args": {
           "id": "22222222-2222-4222-8222-222222222222",
+          "program_id": "99999999-9999-4999-8999-999999999999",
           "name": "Ben"
         }
       },
       "expect": {
-        "rows": {
-          "players": [
-            {
-              "id": "11111111-1111-4111-8111-111111111111",
-              "name": "Ana",
-              "jersey": "4",
-              "active": true
-            },
-            {
-              "id": "22222222-2222-4222-8222-222222222222",
-              "name": "Ben",
-              "jersey": "",
-              "active": true
-            }
-          ]
-        }
+        "rejected": "That program no longer exists."
       }
     },
     {
-      "name": "a null jersey becomes blank",
-      "mutation": {
-        "name": "player.put",
-        "args": {
-          "id": "22222222-2222-4222-8222-222222222222",
-          "name": "Ben",
-          "jersey": null,
-          "active": true
-        }
-      },
-      "expect": {
-        "rows": {
-          "players": [
-            {
-              "id": "11111111-1111-4111-8111-111111111111",
-              "name": "Ana",
-              "jersey": "4",
-              "active": true
-            },
-            {
-              "id": "22222222-2222-4222-8222-222222222222",
-              "name": "Ben",
-              "jersey": "",
-              "active": true
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "a blank jersey stays blank",
-      "mutation": {
-        "name": "player.put",
-        "args": {
-          "id": "22222222-2222-4222-8222-222222222222",
-          "name": "Ben",
-          "jersey": "",
-          "active": true
-        }
-      },
-      "expect": {
-        "rows": {
-          "players": [
-            {
-              "id": "11111111-1111-4111-8111-111111111111",
-              "name": "Ana",
-              "jersey": "4",
-              "active": true
-            },
-            {
-              "id": "22222222-2222-4222-8222-222222222222",
-              "name": "Ben",
-              "jersey": "",
-              "active": true
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "updates an existing player",
+      "name": "renames a player",
       "mutation": {
         "name": "player.put",
         "args": {
           "id": "11111111-1111-4111-8111-111111111111",
-          "name": "Ana B",
-          "jersey": "4",
-          "active": false
-        }
-      },
-      "expect": {
-        "rows": {
-          "players": [
-            {
-              "id": "11111111-1111-4111-8111-111111111111",
-              "name": "Ana B",
-              "jersey": "4",
-              "active": false
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "an update that leaves out a field keeps its value",
-      "mutation": {
-        "name": "player.put",
-        "args": {
-          "id": "11111111-1111-4111-8111-111111111111",
+          "program_id": "b1111111-1111-4111-8111-111111111111",
           "name": "Ana B"
         }
       },
@@ -226,14 +132,26 @@
           "players": [
             {
               "id": "11111111-1111-4111-8111-111111111111",
-              "name": "Ana B",
-              "jersey": "4",
-              "active": true
+              "program_id": "b1111111-1111-4111-8111-111111111111",
+              "name": "Ana B"
             }
           ]
         }
+      }
+    },
+    {
+      "name": "a player can't move to another program",
+      "mutation": {
+        "name": "player.put",
+        "args": {
+          "id": "11111111-1111-4111-8111-111111111111",
+          "program_id": "b2222222-2222-4222-8222-222222222222",
+          "name": "Ana"
+        }
       },
-      "known_difference": "The client fills a missing jersey with \"\" and active with true; the server keeps the stored values. Phase 1, step 2 (partial updates) fixes this."
+      "expect": {
+        "rejected": "Program can't change after the player is created"
+      }
     }
   ]
 }

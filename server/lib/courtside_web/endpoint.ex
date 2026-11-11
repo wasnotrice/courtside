@@ -35,9 +35,14 @@ defmodule CourtsideWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
+  plug CourtsideWeb.Plugs.CORS
+
+  # A push carries at most Courtside.Sync.max_mutations/0 mutations; 1 MB is
+  # plenty for that and keeps one client from sending an enormous body.
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
+    length: 1_000_000,
     json_decoder: Phoenix.json_library()
 
   plug Plug.MethodOverride

@@ -11,6 +11,12 @@ config :courtside,
   ecto_repos: [Courtside.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
+# Origins allowed to call the API from another address: the Tauri app on iOS
+# and Android (phase 3). The web app is served from the API's own address in
+# dev (through Vite's proxy), so it needs no entry here.
+config :courtside,
+  cors_origins: ["tauri://localhost", "http://tauri.localhost", "https://tauri.localhost"]
+
 # Configure the endpoint
 config :courtside, CourtsideWeb.Endpoint,
   url: [host: "localhost"],

@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import { TABLES } from './replay';
 import { describe, expect, it } from 'vitest';
 import { DexieStore } from './dexie-store';
 import { MemoryStore, type LocalStore } from './store';
@@ -7,13 +8,14 @@ import type { PullResponse } from './types';
 
 const pull = (over: Partial<PullResponse> = {}, changes: Partial<PullResponse['changes']> = {}): PullResponse => ({
 	cursor: 1,
+	data_id: 'data-1',
 	last_mutation_id: 0,
 	rejections: [],
 	...over,
-	changes: { players: [], drills: [], runs: [], results: [], ...changes }
+	changes: { ...(Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as PullResponse['changes']), ...changes }
 });
 
-const ana = { id: crypto.randomUUID(), name: 'Ana', jersey: '4', active: true };
+const ana = { id: crypto.randomUUID(), program_id: crypto.randomUUID(), name: 'Ana' };
 const rejection = (id: number) => ({ mutation_id: id, name: 'player.put', args: {}, reason: 'No' });
 
 let n = 0;

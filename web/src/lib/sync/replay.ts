@@ -33,32 +33,39 @@ export function computeView(base: State, pending: readonly PendingMutation[]): V
 	return { state, skipped };
 }
 
+/** The tables a client holds, in the order they're applied. */
+export const TABLES = [
+	'programs',
+	'seasons',
+	'teams',
+	'players',
+	'roster_entries',
+	'drills',
+	'runs',
+	'results'
+] as const satisfies readonly (keyof State)[];
+
+/** A row's key in its table. Results are addressed by (run, player); everything else by id. */
+export function keyOf(table: keyof State, row: { id?: string; drill_run_id?: string; player_id?: string }): string {
+	return table === 'results' ? resultKey(row.drill_run_id!, row.player_id!) : row.id!;
+}
+
 /** Returns a new base with the pull's rows written in and tombstoned rows removed. */
 export function applyPull(base: State, changes: PullResponse['changes']): State {
-	const merge = <W extends { deleted: boolean; version: number }, T>(
-		table: ReadonlyMap<string, T>,
-		rows: W[],
-		key: (row: W) => string,
-		strip: (row: W) => T
-	) => {
-		if (rows.length === 0) return table;
-		const next = new Map(table);
-		for (const row of rows) {
-			if (row.deleted) next.delete(key(row));
-			else next.set(key(row), strip(row));
-		}
-		return next;
-	};
+	const next = { ...base } as Record<keyof State, ReadonlyMap<string, unknown>>;
 
-	return {
-		players: merge(base.players, changes.players, (r) => r.id, ({ deleted: _d, version: _v, ...p }) => p),
-		drills: merge(base.drills, changes.drills, (r) => r.id, ({ deleted: _d, version: _v, ...d }) => d),
-		runs: merge(base.runs, changes.runs, (r) => r.id, ({ deleted: _d, version: _v, ...r }) => r),
-		results: merge(
-			base.results,
-			changes.results,
-			(r) => resultKey(r.drill_run_id, r.player_id),
-			({ deleted: _d, version: _v, ...r }) => r
-		)
-	};
+	for (const table of TABLES) {
+		const rows = changes[table] as unknown as ({ deleted: boolean; version: number } & Record<string, unknown>)[];
+		if (!rows?.length) continue;
+
+		const map = new Map(base[table] as ReadonlyMap<string, unknown>);
+		for (const { deleted, version: _v, ...row } of rows) {
+			const key = keyOf(table, row);
+			if (deleted) map.delete(key);
+			else map.set(key, row);
+		}
+		next[table] = map;
+	}
+
+	return next as unknown as State;
 }

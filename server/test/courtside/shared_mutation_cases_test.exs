@@ -9,11 +9,23 @@ defmodule Courtside.SharedMutationCasesTest do
 
   import Ecto.Query
 
-  alias Courtside.{Repo, Sync}
-  alias Courtside.Practice.{Player, Drill, DrillRun, Result}
+  alias Courtside.{Organizations, Repo, Sync}
+  alias Courtside.Schema.{Drill, DrillRun, Player, Program, Result, RosterEntry, Season, Team}
 
   @dir Path.expand("../../../spec/mutations", __DIR__)
-  @tables ~w(players drills runs results)
+
+  # Case table name, schema, and the fields a case's rows list. In insert order,
+  # so foreign keys are satisfied.
+  @tables [
+    {"programs", Program, [:id, :name, :sport]},
+    {"seasons", Season, [:id, :name, :starts_on, :ends_on]},
+    {"teams", Team, [:id, :program_id, :name]},
+    {"players", Player, [:id, :program_id, :name]},
+    {"roster_entries", RosterEntry, [:id, :team_id, :season_id, :player_id, :jersey]},
+    {"drills", Drill, [:id, :program_id, :name, :kind, :default_setup, :archived]},
+    {"runs", DrillRun, [:id, :program_id, :date, :drill_id, :setup]},
+    {"results", Result, [:drill_run_id, :player_id, :value, :setup]}
+  ]
 
   for file <- @dir |> Path.join("*.json") |> Path.wildcard() |> Enum.sort() do
     @external_resource file
@@ -34,14 +46,15 @@ defmodule Courtside.SharedMutationCasesTest do
   end
 
   defp run_case(given, c) do
+    org = Organizations.create!("Test").id
     extra = Map.get(c, "with", %{})
 
-    for table <- @tables,
+    for {table, schema, _fields} <- @tables,
         row <- Map.get(given, table, []) ++ Map.get(extra, table, []),
-        do: insert!(table, row)
+        do: insert!(schema, row, org)
 
     mutation = Map.put(c["mutation"], "id", 1)
-    {:ok, %{rejections: rejections}} = Sync.push(Ecto.UUID.generate(), [mutation])
+    {:ok, %{rejections: rejections}} = Sync.push(org, Ecto.UUID.generate(), [mutation])
 
     case c["expect"] do
       %{"rejected" => message} ->
@@ -51,77 +64,35 @@ defmodule Courtside.SharedMutationCasesTest do
         assert rejections == []
 
         for {table, rows} <- tables do
-          assert sorted(table, live(table)) == sorted(table, rows), "#{table} differ"
+          assert sorted(table, live(table, org)) == sorted(table, rows), "#{table} differ"
         end
     end
   end
 
-  # Rows go in as they'd be after earlier pushes, at version 1.
-  defp insert!("players", r),
-    do:
-      Repo.insert!(%Player{
-        id: r["id"],
-        name: r["name"],
-        jersey: r["jersey"],
-        active: r["active"],
-        deleted: r["deleted"] || false,
-        version: 1
-      })
+  # Rows go in as they'd be after earlier pushes, at version 1. cast converts
+  # JSON values (dates, integers for float columns); empty_values: [] keeps "".
+  defp insert!(schema, row, org) do
+    fields = schema.__schema__(:fields) -- [:inserted_at, :updated_at]
 
-  defp insert!("drills", r),
-    do:
-      Repo.insert!(%Drill{
-        id: r["id"],
-        name: r["name"],
-        kind: r["kind"],
-        default_setup: float(r["default_setup"]),
-        archived: r["archived"],
-        deleted: r["deleted"] || false,
-        version: 1
-      })
-
-  defp insert!("runs", r),
-    do:
-      Repo.insert!(%DrillRun{
-        id: r["id"],
-        date: Date.from_iso8601!(r["date"]),
-        drill_id: r["drill_id"],
-        setup: float(r["setup"]),
-        deleted: r["deleted"] || false,
-        version: 1
-      })
-
-  defp insert!("results", r),
-    do:
-      Repo.insert!(%Result{
-        drill_run_id: r["drill_run_id"],
-        player_id: r["player_id"],
-        value: float(r["value"]),
-        setup: float(r["setup"]),
-        deleted: r["deleted"] || false,
-        version: 1
-      })
-
-  defp float(nil), do: nil
-  defp float(n), do: n / 1
+    schema
+    |> struct()
+    |> Ecto.Changeset.cast(row, fields, empty_values: [])
+    |> Ecto.Changeset.put_change(:organization_id, org)
+    |> Ecto.Changeset.put_change(:version, 1)
+    |> Repo.insert!()
+  end
 
   # Live rows in the wire shape, minus version and deleted, with string keys.
-  defp live(table) do
-    {schema, fields} =
-      case table do
-        "players" -> {Player, [:id, :name, :jersey, :active]}
-        "drills" -> {Drill, [:id, :name, :kind, :default_setup, :archived]}
-        "runs" -> {DrillRun, [:id, :date, :drill_id, :setup]}
-        "results" -> {Result, [:drill_run_id, :player_id, :value, :setup]}
-      end
+  defp live(table, org) do
+    {_name, schema, fields} = Enum.find(@tables, fn {name, _, _} -> name == table end)
 
-    from(r in schema, where: not r.deleted)
+    from(r in schema, where: r.organization_id == ^org and not r.deleted)
     |> Repo.all()
     |> Enum.map(fn row ->
       row
       |> Map.take(fields)
       |> Map.new(fn
-        {:date, d} -> {"date", Date.to_iso8601(d)}
+        {k, %Date{} = d} -> {to_string(k), Date.to_iso8601(d)}
         {k, v} -> {to_string(k), v}
       end)
     end)

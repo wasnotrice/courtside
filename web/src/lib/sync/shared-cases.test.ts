@@ -6,9 +6,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { apply, MutationError } from './mutators';
-import { resultKey, type MutationInput, type State } from './types';
+import { keyOf as rowKey, TABLES } from './replay';
+import type { MutationInput, State } from './types';
 
-type Table = 'players' | 'drills' | 'runs' | 'results';
+type Table = keyof State;
 type Row = Record<string, unknown> & { deleted?: boolean };
 type Rows = Partial<Record<Table, Row[]>>;
 
@@ -21,10 +22,7 @@ interface Case {
 }
 
 const dir = fileURLToPath(new URL('../../../../spec/mutations/', import.meta.url));
-const TABLES: Table[] = ['players', 'drills', 'runs', 'results'];
-
-const keyOf = (table: Table, row: Row) =>
-	table === 'results' ? resultKey(row.drill_run_id as string, row.player_id as string) : (row.id as string);
+const keyOf = (table: Table, row: Row) => rowKey(table, row as Parameters<typeof rowKey>[1]);
 
 /** The client's base after a pull: tombstones never reach it. */
 function stateFrom(given: Rows, extra: Rows = {}): State {
