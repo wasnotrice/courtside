@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { server } from '$lib/sync/index.svelte';
 	import { getApp } from './context.svelte';
 	import StatusPill from './StatusPill.svelte';
 	import Tabs from './Tabs.svelte';
@@ -46,14 +47,28 @@
 	</label>
 
 	<dl class="kv">
+		<dt>Organization</dt><dd>{server.organizationId}</dd>
 		<dt>Client id</dt><dd>{s.clientId}</dd>
 		<dt>Cursor</dt><dd>{s.cursor}</dd>
+		<dt>Data id</dt><dd>{s.dataId ?? 'not pulled yet'}</dd>
 		<dt>Last mutation id</dt><dd>{s.lastMutationId}</dd>
 		<dt>State</dt><dd>{s.phase}</dd>
 		<dt>Last synced</dt><dd>{s.lastSyncedAt?.toLocaleTimeString() ?? 'never'}</dd>
 		{#if s.lastError}<dt>Last error</dt><dd class="err">{s.lastError}</dd>{/if}
 		<dt>Rows</dt>
-		<dd>{s.view.players.size} players · {s.view.drills.size} drills · {s.view.runs.size} runs · {s.view.results.size} results</dd>
+		<dd>
+			{s.view.programs.size} programs · {s.view.seasons.size} seasons · {s.view.teams.size} teams ·
+			{s.view.players.size} players · {s.view.roster_entries.size} roster entries · {s.view.drills.size} drills ·
+			{s.view.runs.size} runs · {s.view.results.size} results
+		</dd>
+		<dt>Storage</dt>
+		<dd class:err={app.sync.persisted === false}>
+			{app.sync.persisted === true
+				? 'Kept even when the device is low on space'
+				: app.sync.persisted === false
+					? 'May be cleared when the device is low on space. Add Courtside to the home screen.'
+					: 'Unknown'}
+		</dd>
 	</dl>
 
 	<div class="toolbar">

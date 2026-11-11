@@ -12,11 +12,12 @@
 		KINDS,
 		pct,
 		readSetup,
+		playersForRun,
 		results,
-		roster,
 		score,
 		setupText,
-		summary
+		summary,
+		teamsOf
 	} from './domain';
 	import RejectionNote from './RejectionNote.svelte';
 	import Sheet from './Sheet.svelte';
@@ -34,7 +35,12 @@
 	const drill = $derived(view.drills.get(run.drill_id)!);
 	const K = $derived(KINDS[drill.kind]);
 	const rs = $derived(results(view, runId));
-	const list = $derived(roster(view, new Set(rs.keys())));
+	// Everyone on the program's rosters this season, or one team's, plus anyone with a result.
+	const teams = $derived(teamsOf(view, run.program_id));
+	let team = $state<string | null>(null);
+	const rows = $derived(playersForRun(view, run, team));
+	const list = $derived(rows.map((r) => r.player));
+	const jerseyOf = $derived(new Map(rows.map((r) => [r.player.id, r.jersey])));
 
 	// Rejections and locally-skipped mutations, matched to the row they affect.
 	const argsOf = (a: unknown) => a as Record<string, unknown>;
@@ -228,7 +234,15 @@
 		<button class="chip" onclick={openSetup}>{setupText(drill.kind, run.setup)} · Change</button>
 		<span class="muted">{fmtDate(run.date)}</span>
 	</div>
-	<p class="sum"><b>{rs.size}</b> of {list.length} entered · {summary(view, drill, run)}</p>
+	{#if teams.length > 1}
+		<div class="chips" role="tablist" aria-label="Team">
+			<button class:on={team === null} onclick={() => (team = null)}>Everyone</button>
+			{#each teams as t (t.id)}
+				<button class:on={team === t.id} onclick={() => (team = t.id)}>{t.name}</button>
+			{/each}
+		</div>
+	{/if}
+	<p class="sum"><b>{list.filter((p) => rs.has(p.id)).length}</b> of {list.length} entered · {summary(view, drill, run)}</p>
 	{#each runRejections as r (r.mutation_id)}
 		<RejectionNote rejection={r} standalone />
 	{/each}
@@ -251,7 +265,7 @@
 				{@const isPB = sc !== null && prior !== null && beats(drill, sc, prior)}
 				<li>
 					<button class="prow" class:sel={isSel} class:missing={!r} aria-pressed={isSel} onclick={() => select(p.id)}>
-						<span class="jn">{p.jersey || '–'}</span>
+						<span class="jn">{jerseyOf.get(p.id) || '–'}</span>
 						<span class="pname">
 							<b>{p.name}</b>
 							<small>{prior !== null ? `Best ${fmtScore(drill, prior)}` : r ? 'First result' : ''}</small>
@@ -286,7 +300,7 @@
 <div class="keypad" role="group" aria-label="Number pad">
 	<div class="kphead">
 		{#if selected}
-			<span>{selected.jersey ? `#${selected.jersey} ` : ''}{selected.name}</span>
+			<span>{jerseyOf.get(selected.id) ? `#${jerseyOf.get(selected.id)} ` : ''}{selected.name}</span>
 			<span class="muted">{target === 'setup' ? `Enter ${K.setupWord} for this player only` : `Enter ${K.valueWord}`}</span>
 		{:else}
 			<span class="muted">Tap a player to enter a result</span>

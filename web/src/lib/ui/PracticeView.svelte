@@ -1,6 +1,20 @@
 <script lang="ts">
 	import { getApp } from './context.svelte';
-	import { drillsByUse, fmtDate, KINDS, readSetup, results, roster, runsOn, setupText, summary, todayISO } from './domain';
+	import {
+		drillsByUse,
+		ensureSeason,
+		fmtDate,
+		KINDS,
+		readSetup,
+		results,
+		rosterOf,
+		runsOn,
+		seasonOf,
+		setupText,
+		summary,
+		todayISO
+	} from './domain';
+	import ScopeBar from './ScopeBar.svelte';
 	import Sheet from './Sheet.svelte';
 	import SetupField from './SetupField.svelte';
 	import StatusPill from './StatusPill.svelte';
@@ -9,8 +23,11 @@
 
 	const app = getApp();
 	const view = $derived(app.view);
-	const runs = $derived(runsOn(view, app.date));
-	const total = $derived(roster(view).length);
+	const program = $derived(app.program!);
+	const runs = $derived(runsOn(view, app.date).filter((r) => r.program_id === program.id));
+	// Everyone on the program's rosters for the season this date falls in.
+	const total = $derived(rosterOf(view, program.id, seasonOf(view, app.date)?.id).length);
+	const drills = $derived(drillsByUse(view).filter((d) => d.program_id === program.id && !d.archived));
 	const rejected = $derived(app.sync.snapshot.rejections.length);
 
 	// The "Add a drill" sheet.
@@ -54,10 +71,17 @@
 
 		const runId = crypto.randomUUID();
 		const ok = await app.mutate(
+			// The first practice of a school year starts its season, even offline.
+			...ensureSeason(view, app.date),
 			...(create
-				? [{ name: 'drill.put' as const, args: { id: drillId, name: create.name, kind: k, default_setup: res.v, archived: false } }]
+				? [
+						{
+							name: 'drill.put' as const,
+							args: { id: drillId, program_id: program.id, name: create.name, kind: k, default_setup: res.v, archived: false }
+						}
+					]
 				: []),
-			{ name: 'run.create', args: { id: runId, date: app.date, drill_id: drillId, setup: res.v } }
+			{ name: 'run.create', args: { id: runId, program_id: program.id, date: app.date, drill_id: drillId, setup: res.v } }
 		);
 		if (!ok) return;
 		adding = false;
@@ -76,6 +100,7 @@
 		<label class="date"><span class="sr">Practice date</span><input type="date" bind:value={app.date} /></label>
 		<span class="muted">{app.date === todayISO() ? 'Today' : fmtDate(app.date)}</span>
 	</div>
+	<ScopeBar />
 </header>
 
 <main>
@@ -85,7 +110,9 @@
 		</button>
 	{/if}
 	{#if !total}
-		<div class="note">Add your players first. <button class="link" onclick={() => app.go('roster')}>Go to Roster</button></div>
+		<div class="note">
+			No players on a roster for this season yet. <button class="link" onclick={() => app.go('roster')}>Go to Roster</button>
+		</div>
 	{/if}
 
 	{#if runs.length}
@@ -136,7 +163,7 @@
 		{:else}
 			<h2>Add a drill</h2>
 			<ul class="dlist">
-				{#each drillsByUse(view).filter((d) => !d.archived) as d (d.id)}
+				{#each drills as d (d.id)}
 					{#if pick === d.id}
 						<li class="pick">
 							<div class="row"><b>{d.name}</b><span class="tag k-{d.kind}">{KINDS[d.kind].name}</span></div>
