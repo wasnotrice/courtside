@@ -455,7 +455,10 @@ records each change's *reverse* at that moment, from the current view:
   change with the fields' current values, sending only those fields.
 
 Reverses live in memory, newest first, for the screen they were made on; reloading
-the app clears them. Undo sends the reverse rather than pulling the change out of the
+the app clears them. Undoing a play's delete records the play again
+under a new id (the server keeps the deleted one deleted), and older undo steps that
+named the old id follow it to the new one. Built for the live screen (an Undo bar above
+the recent plays) and the practice entry screen (an Undo key on the pad). Undo sends the reverse rather than pulling the change out of the
 queue, because the change may already be on its way to the server or confirmed. If
 someone else changed the same field in between, undo overwrites theirs (the last
 change to reach the server wins); on the live screen, with one scorer, that's rare.
@@ -473,6 +476,9 @@ entries newest first (and later a game's edits, or recent changes for the
 organization), filtered like pull. Phones show it when online and say "History needs a
 connection" when not.
 
+- **Where:** History on the play edit sheet, the game details sheet and the player edit
+  sheet. Each entry says what changed ("Period: 1st half → 2nd half"), which phone (this
+  one or another) and how long ago; refused changes show their reason.
 - **Revert from history** sends the entry's before values as an ordinary change. If
   the field has changed since, the sheet warns first ("Changed again since, to 44 by
   the assistant's phone. Revert anyway?").

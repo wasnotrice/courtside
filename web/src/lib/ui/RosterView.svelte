@@ -5,6 +5,7 @@
 	import { draftOf, readRules, rulesName, sameRules, teamRules, type RulesDraft } from './games';
 	import RulesEditor from './RulesEditor.svelte';
 	import ScopeBar from './ScopeBar.svelte';
+	import HistoryPanel from './HistoryPanel.svelte';
 	import Sheet from './Sheet.svelte';
 	import StatusPill from './StatusPill.svelte';
 	import Tabs from './Tabs.svelte';
@@ -109,6 +110,7 @@
 		joinJersey: string;
 	}
 	let editing = $state<Draft | null>(null);
+	let showHistory = $state(false);
 	let err = $state('');
 
 	const entriesOf = (playerId: string): RosterEntry[] =>
@@ -241,7 +243,10 @@
 
 {#if editing}
 	{@const entries = entriesOf(editing.player.id)}
-	<Sheet onclose={() => (editing = null)}>
+	<Sheet onclose={() => ((editing = null), (showHistory = false))}>
+		{#if showHistory}
+			<HistoryPanel table="players" key={editing.player.id} row={view.players.get(editing.player.id) ?? editing.player} onback={() => (showHistory = false)} />
+		{:else}
 		<h2>Edit player</h2>
 		<label class="field"><span>Name</span><input autocomplete="off" bind:value={editing.name} /></label>
 		{#each entries as e (e.id)}
@@ -267,6 +272,8 @@
 				<label class="field grow"><span class="sr">Jersey</span><input inputmode="numeric" placeholder="Jersey" bind:value={editing.joinJersey} /></label>
 				<button class="secondary" onclick={join}>Add</button>
 			</div>
+		{/if}
+		<button class="link" onclick={() => (showHistory = true)}>Name history</button>
 		{/if}
 	</Sheet>
 {/if}

@@ -236,3 +236,18 @@ export interface PullResponse {
 		plays: Synced<Play>[];
 	};
 }
+
+/** One change to a row, from the server's change log (GET /api/history). */
+export interface HistoryEntry {
+	version: number;
+	client_id: string;
+	mutation_id: number;
+	name: string;
+	accepted: boolean;
+	/** Why it was refused. */
+	reason: string | null;
+	/** Each changed field's value before and after. Before is null for a new row. */
+	changes: Record<string, [unknown, unknown]> | null;
+	/** When the server got it, as an ISO timestamp. */
+	at: string;
+}

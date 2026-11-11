@@ -87,7 +87,7 @@
 				app.showToast('err' in res ? res.err : 'Enter a number above zero.');
 				return false;
 			}
-			const ok = await app.mutate({
+			const ok = await app.mutateUndoable(scope, `${nameOf(sel)}'s ${K.setupWord}`, {
 				name: 'result.set_setup',
 				args: { ...key, setup: res.v === run.setup ? null : res.v }
 			});
@@ -100,10 +100,18 @@
 			app.showToast('That number is not valid.');
 			return false;
 		}
-		const ok = await app.mutate({ name: 'result.set_value', args: { ...key, value: v } });
+		const ok = await app.mutateUndoable(scope, `${nameOf(sel)} ${fmtValue(drill.kind, v)}`, {
+			name: 'result.set_value',
+			args: { ...key, value: v }
+		});
 		if (ok) buf = '';
 		return ok;
 	}
+
+	// Undo for this run's results, newest first.
+	const scope = $derived(`run:${runId}`);
+	const lastUndo = $derived(app.lastUndo(scope));
+	const nameOf = (id: string) => view.players.get(id)?.name ?? 'Player';
 
 	async function clear() {
 		if (!sel) return;
@@ -112,10 +120,14 @@
 		buf = '';
 		if (!raw) return;
 		if (target === 'setup') {
-			if (raw.setup !== null) await app.mutate({ name: 'result.set_setup', args: { ...key, setup: null } });
+			if (raw.setup !== null) {
+				await app.mutateUndoable(scope, `${nameOf(sel)}'s ${K.setupWord}`, { name: 'result.set_setup', args: { ...key, setup: null } });
+			}
 		} else if (raw.value !== null) {
 			// result.clear drops the whole row, so put back a per-player setup if there was one.
-			await app.mutate(
+			await app.mutateUndoable(
+				scope,
+				`clear ${nameOf(sel)}`,
 				{ name: 'result.clear', args: key },
 				...(raw.setup !== null ? [{ name: 'result.set_setup' as const, args: { ...key, setup: raw.setup } }] : [])
 			);
@@ -305,6 +317,9 @@
 		{:else}
 			<span class="muted">Tap a player to enter a result</span>
 		{/if}
+		{#if lastUndo}
+			<button class="undo" aria-label="Undo {lastUndo.label}" onclick={() => app.undo(scope)}>↶ Undo</button>
+		{/if}
 	</div>
 	<div class="keys">
 		{#each ['1', '2', '3'] as k (k)}<button class="k" disabled={!selected} onclick={() => press(k)}>{k}</button>{/each}
@@ -343,3 +358,14 @@
 		<button class="danger wide" onclick={removeRun}>Remove</button>
 	</Sheet>
 {/if}
+
+<style>
+	.kphead .undo {
+		flex: none;
+		background: none;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 4px 10px;
+		font-weight: 600;
+	}
+</style>

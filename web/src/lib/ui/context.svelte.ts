@@ -5,7 +5,18 @@
 import { getContext, setContext } from 'svelte';
 import type { Sync } from '$lib/sync/index.svelte';
 import type { MutationInput, Program, Season } from '$lib/sync/types';
+import { renamed, renamesOf, reverseOf } from '$lib/sync/undo';
 import { seasonOf, todayISO } from './domain';
+
+/** One step that can be undone: what it was, and the changes that put it back. */
+export interface Undo {
+	/** The screen it was made on, such as "game:<id>" or "run:<id>". */
+	scope: string;
+	label: string;
+	reverse: MutationInput[];
+	/** Old id to new id, for plays this step's undo records again under a new id. */
+	renames: Map<string, string>;
+}
 
 // The chosen program and season are remembered on this device. Storage can be
 // unavailable (private browsing), so failures just mean "not remembered".
@@ -40,6 +51,8 @@ export class AppState {
 	gamesPane = $state<'games' | 'season'>('games');
 	historyDrill = $state<string | null>(null);
 	toast = $state('');
+	/** Undo steps, oldest first. In memory only: reloading the app clears them. */
+	private undos = $state.raw<Undo[]>([]);
 	private programId = $state(remembered('program'));
 	private seasonId = $state(remembered('season'));
 	private toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -91,6 +104,48 @@ export class AppState {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Queues changes as one step that `undo(scope)` can take back. Each change's reverse
+	 * comes from the view just before it, the only time the phone knows the old values.
+	 */
+	async mutateUndoable(scope: string, label: string, ...inputs: MutationInput[]): Promise<boolean> {
+		let reverse: MutationInput[] = [];
+		const renames = new Map<string, string>();
+		let ok = true;
+		for (const input of inputs) {
+			const back = reverseOf(this.view, input);
+			if (!(await this.mutate(input))) {
+				ok = false;
+				break;
+			}
+			reverse = [...(back ?? []), ...reverse];
+			for (const [from, to] of renamesOf(input, back ?? [])) renames.set(from, to);
+		}
+		if (reverse.length) this.undos = [...this.undos.slice(-49), { scope, label, reverse, renames }];
+		return ok;
+	}
+
+	/** The step `undo(scope)` would take back. */
+	lastUndo(scope: string): Undo | undefined {
+		return this.undos.findLast((u) => u.scope === scope);
+	}
+
+	/**
+	 * Takes back the newest step made on `scope`'s screen by sending its reverse, checked
+	 * like any other change. If someone changed the same fields since, this overwrites them.
+	 */
+	async undo(scope: string): Promise<boolean> {
+		const step = this.lastUndo(scope);
+		if (!step) return false;
+		const ok = await this.mutate(...step.reverse);
+		// Older steps that named a play this brought back under a new id now name the new one.
+		this.undos = this.undos
+			.filter((u) => u !== step)
+			.map((u) => (step.renames.size ? { ...u, reverse: renamed(u.reverse, step.renames) } : u));
+		if (ok) this.showToast(`Undone: ${step.label}`);
+		return ok;
 	}
 
 	showToast(message: string) {

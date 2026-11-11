@@ -5,6 +5,7 @@
 	import { changedFields, ensureSeason, seasonOf, teamsOf, todayISO } from './domain';
 	import { draftOf, matchup, readRules, rulesName, sameRules, teamRules } from './games';
 	import RulesEditor from './RulesEditor.svelte';
+	import HistoryPanel from './HistoryPanel.svelte';
 	import Sheet from './Sheet.svelte';
 
 	let {
@@ -18,6 +19,7 @@
 	const teams = $derived(teamsOf(view, app.program?.id));
 	// svelte-ignore state_referenced_locally
 	const start = game;
+	let showHistory = $state(false);
 	const plays = $derived(start ? [...view.plays.values()].filter((p) => p.game_id === start.id).length : 0);
 
 	// svelte-ignore state_referenced_locally
@@ -85,6 +87,9 @@
 </script>
 
 <Sheet {onclose}>
+	{#if showHistory && start}
+		<HistoryPanel table="games" key={start.id} row={view.games.get(start.id) ?? start} onback={() => (showHistory = false)} />
+	{:else}
 	<h2>{start ? 'Game details' : 'New game'}</h2>
 	{#if teams.length > 1 && !start}
 		<label class="field">
@@ -135,6 +140,8 @@
 		{:else}
 			<button class="danger-link" onclick={() => (confirmDelete = true)}>Delete game</button>
 		{/if}
+		<button class="link" onclick={() => (showHistory = true)}>History</button>
+	{/if}
 	{/if}
 </Sheet>
 

@@ -4,6 +4,7 @@
 import { DexieStore } from './dexie-store';
 import { SyncEngine, type SyncSnapshot } from './engine';
 import { HttpTransport, PhoenixPokes, type ServerConfig } from './transport';
+import type { HistoryEntry } from './types';
 
 export type { MutateResult, Phase, SyncSnapshot } from './engine';
 export type * from './types';
@@ -30,13 +31,16 @@ export interface Sync {
 	 * likely on iOS.
 	 */
 	readonly persisted: boolean | null;
+	/** A row's change log, newest first, from the server. Fails without a connection. */
+	history(table: string, key: string): Promise<HistoryEntry[]>;
 }
 
 /** Opens local data and starts syncing. Call once, from the root layout. */
 export async function openSync(): Promise<Sync> {
+	const transport = new HttpTransport(server);
 	const engine = await SyncEngine.open({
 		store: new DexieStore(server.organizationId),
-		transport: new HttpTransport(server),
+		transport,
 		pokes: new PhoenixPokes(server)
 	});
 
@@ -51,7 +55,8 @@ export async function openSync(): Promise<Sync> {
 		get snapshot() {
 			return snapshot;
 		},
-		persisted
+		persisted,
+		history: async (table, key) => (await transport.history(table, key)).entries
 	};
 }
 

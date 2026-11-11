@@ -103,7 +103,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 			recorded_at: now
 		};
 		const { foul_type: _f, assist_player_id: _a, drawn_by_player_id: _d, clock: _c, video_at: _v, ...args } = play;
-		return (await app.mutate({ name: 'play.put', args })) ? play : null;
+		return (await app.mutateUndoable(scope, describePlay(play, nameOf), { name: 'play.put', args })) ? play : null;
 	}
 
 	/** Records a play, then asks its follow-up question. */
@@ -119,9 +119,9 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	/** Answers the follow-up by changing the play it asked about. */
 	async function amend(change: { assist_player_id?: string; foul_type?: FoulType; drawn_by_player_id?: string }) {
 		if (!followUp) return;
-		const id = followUp.play.id;
+		const play = followUp.play;
 		followUp = null;
-		await app.mutate({ name: 'play.put', args: { id, ...change } });
+		await app.mutateUndoable(scope, describePlay({ ...play, ...change }, nameOf), { name: 'play.put', args: { id: play.id, ...change } });
 	}
 
 	async function rebound(by: Rebounder) {
@@ -158,7 +158,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 
 	async function remove(play: Play) {
 		if (followUp?.play.id === play.id) followUp = null;
-		await app.mutate({ name: 'play.delete', args: { id: play.id } });
+		await app.mutateUndoable(scope, `delete ${describePlay(play, nameOf)}`, { name: 'play.delete', args: { id: play.id } });
 	}
 
 	// --- the rest of the screen -------------------------------------------------------------
@@ -207,6 +207,15 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		flagrant: 'Flagrant'
 	};
 	const recent = $derived(plays.slice(-5).reverse());
+
+	// --- undo -----------------------------------------------------------------------------
+
+	const scope = $derived(`game:${gameId}`);
+	const lastUndo = $derived(app.lastUndo(scope));
+	async function undo() {
+		followUp = null;
+		await app.undo(scope);
+	}
 	const shooterOf = $derived(followUp?.play.player_id ?? null);
 </script>
 
@@ -326,6 +335,10 @@ plays below; a skippable follow-up question after some plays; the last few plays
 			{/if}
 			<button class="skip" onclick={() => (followUp = null)}>Skip</button>
 		</div>
+	{/if}
+
+	{#if lastUndo}
+		<button class="undo" onclick={undo}><b>↶ Undo</b> <span>{lastUndo.label}</span></button>
 	{/if}
 
 	{#if recent.length}
@@ -502,6 +515,23 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		background: none;
 		border: 0;
 		color: var(--muted);
+	}
+	.undo {
+		display: flex;
+		gap: 8px;
+		align-items: baseline;
+		background: var(--surface);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 10px 12px;
+		text-align: left;
+		min-width: 0;
+	}
+	.undo span {
+		color: var(--muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.recent {
 		display: grid;

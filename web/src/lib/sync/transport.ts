@@ -6,7 +6,7 @@
 // the session.
 
 import { Socket } from 'phoenix';
-import type { PullResponse, PushRequest, PushResponse } from './types';
+import type { HistoryEntry, PullResponse, PushRequest, PushResponse } from './types';
 
 export interface Transport {
 	push(request: PushRequest): Promise<PushResponse>;
@@ -59,6 +59,12 @@ export class HttpTransport implements Transport {
 			cursor: String(cursor)
 		});
 		return this.request(`/api/pull?${query}`, { method: 'GET' });
+	}
+
+	/** A row's change log, newest first (GET /api/history). Needs a connection. */
+	history(table: string, key: string): Promise<{ entries: HistoryEntry[] }> {
+		const query = new URLSearchParams({ organization_id: this.server.organizationId, table, key });
+		return this.request(`/api/history?${query}`, { method: 'GET' });
 	}
 
 	private async request<T>(path: string, init: RequestInit): Promise<T> {

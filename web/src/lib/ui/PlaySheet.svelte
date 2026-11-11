@@ -8,6 +8,7 @@ play has, with the stat pad laid out as on the live screen. -->
 	import { changedFields, type RosterRow } from './domain';
 	import { STAT_LABEL, STAT_PAD } from './live';
 	import { fmtClock, parseTime } from './review';
+	import HistoryPanel from './HistoryPanel.svelte';
 	import Sheet from './Sheet.svelte';
 
 	let {
@@ -51,6 +52,7 @@ play has, with the stat pad laid out as on the live screen. -->
 	});
 	let err = $state('');
 	let confirmDelete = $state(false);
+	let showHistory = $state(false);
 
 	const isMake = $derived(MADE_FIELD_GOALS.includes(draft.stat));
 	// Periods to offer: regulation, any overtime already played, and one more.
@@ -106,6 +108,9 @@ play has, with the stat pad laid out as on the live screen. -->
 </script>
 
 <Sheet {onclose}>
+	{#if showHistory && play}
+		<HistoryPanel table="plays" key={play.id} row={app.view.plays.get(play.id) ?? play} rules={game.rules} onback={() => (showHistory = false)} />
+	{:else}
 	<h2>{play ? 'Edit play' : 'Add a play'}</h2>
 	<div class="seg two">
 		<button class:on={draft.side === 'us'} onclick={() => (draft.side = 'us')}>Us</button>
@@ -179,6 +184,8 @@ play has, with the stat pad laid out as on the live screen. -->
 		{:else}
 			<button class="danger-link" onclick={() => (confirmDelete = true)}>Delete play</button>
 		{/if}
+		<button class="link" onclick={() => (showHistory = true)}>History</button>
+	{/if}
 	{/if}
 </Sheet>
 
