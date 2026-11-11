@@ -16,12 +16,32 @@ export interface Preset {
 	rules: Rules;
 }
 
+const HALVES_7_10 = {
+	periods: 2,
+	team_fouls_reset: 'half',
+	bonus_at: 7,
+	bonus: 'one_and_one',
+	double_bonus_at: 10
+} as const satisfies Partial<Rules>;
+
 export const PRESETS: readonly Preset[] = [
 	{ key: 'nfhs', name: 'High school (NFHS)', rules: DEFAULT_RULES },
 	{
 		key: 'nfhs_pre_2023',
 		name: 'High school before 2023–24',
 		rules: { ...DEFAULT_RULES, team_fouls_reset: 'half', bonus_at: 7, bonus: 'one_and_one', double_bonus_at: 10 }
+	},
+	// Minnesota (MSHSL) plays halves, keeping the pre-2023 bonus: one-and-one from the 7th
+	// foul in a half, two shots from the 10th. Below varsity, halves are at most 16 minutes.
+	{
+		key: 'mshsl_varsity',
+		name: 'Minnesota varsity (MSHSL)',
+		rules: { ...DEFAULT_RULES, ...HALVES_7_10, period_minutes: 18 }
+	},
+	{
+		key: 'mshsl_below_varsity',
+		name: 'Minnesota JV and below (MSHSL)',
+		rules: { ...DEFAULT_RULES, ...HALVES_7_10, period_minutes: 16 }
 	},
 	{
 		key: 'ncaa_women',
@@ -154,7 +174,8 @@ const emptyLine = (): Line => ({
 	fd: 0
 });
 
-const POINTS: Partial<Record<Stat, number>> = { ft_made: 1, fg2_made: 2, fg3_made: 3 };
+/** Points each stat scores. */
+export const POINTS: Partial<Record<Stat, number>> = { ft_made: 1, fg2_made: 2, fg3_made: 3 };
 
 /** Adds one play's stat to a line (the player who made the play). */
 function add(line: Line, play: Play) {

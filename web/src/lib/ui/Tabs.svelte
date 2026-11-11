@@ -4,6 +4,7 @@
 	const app = getApp();
 	const tabs: [Tab, string][] = [
 		['today', 'Practice'],
+		['games', 'Games'],
 		['roster', 'Roster'],
 		['history', 'History'],
 		['sync', 'Sync']

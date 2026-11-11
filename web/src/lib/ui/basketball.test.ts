@@ -128,6 +128,16 @@ describe('boxScore', () => {
 });
 
 describe('team fouls and the bonus', () => {
+	it('in Minnesota: one-and-one from the 7th foul a half, two shots from the 10th, into overtime', () => {
+		const mn = PRESETS.find((x) => x.key === 'mshsl_varsity')!.rules;
+		const fouls = (n: number, period: number) => Array.from({ length: n }, () => foul('them', period));
+		expect(bonusFor(fouls(5, 1), mn, 'us', 1)).toBe('none');
+		expect(bonusFor(fouls(6, 1), mn, 'us', 1)).toBe('one_and_one');
+		expect(bonusFor(fouls(9, 1), mn, 'us', 1)).toBe('two_shots');
+		expect(bonusFor(fouls(9, 1), mn, 'us', 2)).toBe('none');
+		expect(bonusFor(fouls(9, 2), mn, 'us', 3)).toBe('two_shots');
+	});
+
 	it('reset each quarter (NFHS), but carry from the fourth quarter into overtime', () => {
 		expect([1, 2, 3, 4, 5, 6].map((q) => foulPeriodOf(nfhs, q))).toEqual([1, 2, 3, 4, 4, 4]);
 		expect([1, 2, 3, 4, 5].map((q) => foulPeriodOf(old, q))).toEqual([1, 1, 2, 2, 2]);

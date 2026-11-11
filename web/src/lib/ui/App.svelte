@@ -2,6 +2,7 @@
 	import type { Sync } from '$lib/sync/index.svelte';
 	import { AppState, setApp } from './context.svelte';
 	import EntryView from './EntryView.svelte';
+	import GamesView from './GamesView.svelte';
 	import HistoryView from './HistoryView.svelte';
 	import PracticeView from './PracticeView.svelte';
 	import ProgramSetup from './ProgramSetup.svelte';
@@ -26,6 +27,8 @@
 		{#key app.runId}
 			<EntryView runId={app.runId} />
 		{/key}
+	{:else if app.tab === 'games'}
+		<GamesView />
 	{:else if app.tab === 'roster'}
 		<RosterView />
 	{:else if app.tab === 'history'}

@@ -27,6 +27,23 @@ The NFHS change to the bonus took effect in 2023-24
 rule 4-8-1). Before that, high schools played a one-and-one from the 7th team foul in a
 half and two shots from the 10th, which is the "before 2023-24" preset.
 
+## Minnesota (MSHSL)
+
+The MSHSL's [2025-2026 Manual for Athletic Officials](https://www.mshsl.org/sites/default/files/2025-08/2025-2026-officials-manual.pdf),
+"Basketball" (page 28), modifies the NFHS rules:
+
+- "All varsity basketball games will be played as two eighteen (18) minute halves", boys
+  and girls alike, and "Games below the varsity level must also be played in halves with
+  a maximum time of sixteen (16) minutes."
+- "Beginning with a team's seventh foul in each half the 'one-and-one' free throw is
+  awarded … Beginning with the team's 10th foul in each half, two free throws are
+  awarded": the pre-2023 NFHS bonus, counted per half.
+
+Overtime, fouling out and ejection aren't modified, so they follow NFHS (4-minute
+overtime, out on the 5th foul, ejected on the 2nd technical or a flagrant foul). These
+are the "Minnesota varsity" (2 × 18) and "Minnesota JV and below" (2 × 16) presets;
+shorter sub-varsity halves use custom rules.
+
 ## How Courtside models them
 
 - **The reset never applies going into overtime.** NFHS and NCAA women reset after

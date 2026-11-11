@@ -1,7 +1,9 @@
 <script lang="ts">
-	import type { Player, RosterEntry } from '$lib/sync/types';
+	import type { Player, RosterEntry, Team } from '$lib/sync/types';
 	import { getApp } from './context.svelte';
 	import { changedFields, ensureSeason, parseRoster, rosterOf, teamsOf, todayISO } from './domain';
+	import { draftOf, readRules, rulesName, sameRules, teamRules, type RulesDraft } from './games';
+	import RulesEditor from './RulesEditor.svelte';
 	import ScopeBar from './ScopeBar.svelte';
 	import Sheet from './Sheet.svelte';
 	import StatusPill from './StatusPill.svelte';
@@ -67,12 +69,34 @@
 
 	// --- teams ----------------------------------------------------------------
 
-	let newTeam = $state('');
+	// The team sheet: a team's name, and the rules its new games start with. A new
+	// team starts from the program's first team's rules, since a school's teams
+	// usually play the same format.
+	let teamDraft = $state<{ team: Team | null; name: string; rules: RulesDraft } | null>(null);
+	let teamErr = $state('');
 
-	async function createTeam() {
-		const name = newTeam.trim();
-		if (!name) return;
-		if (await app.mutate({ name: 'team.put', args: { id: crypto.randomUUID(), program_id: program.id, name } })) newTeam = '';
+	function editTeam(team: Team | null) {
+		teamDraft = { team, name: team?.name ?? '', rules: draftOf(teamRules(team ?? teams[0])) };
+		teamErr = '';
+	}
+
+	async function saveTeam() {
+		if (!teamDraft) return;
+		const name = teamDraft.name.trim();
+		if (!name) return (teamErr = 'Give the team a name.');
+		const read = readRules(teamDraft.rules);
+		if ('err' in read) return (teamErr = read.err);
+		const { team } = teamDraft;
+		const args: Partial<Team> & { id: string } = team
+			? (changedFields(team, { id: team.id, name }) ?? { id: team.id })
+			: { id: crypto.randomUUID(), program_id: program.id, name };
+		// A team on the default rules keeps null until it picks something else.
+		if (!sameRules(teamRules(team ?? undefined), read.rules)) args.default_rules = read.rules;
+		if (!team || Object.keys(args).length > 1) {
+			const outcome = await app.sync.engine.mutate({ name: 'team.put', args });
+			if (!outcome.ok) return (teamErr = outcome.reason);
+		}
+		teamDraft = null;
 	}
 
 	// --- editing a player -----------------------------------------------------
@@ -202,10 +226,16 @@
 	<button class="primary wide" onclick={addPlayers}>Add players{addTeam ? ` to ${addTeam.name}` : ''}</button>
 
 	<h3>Teams</h3>
-	<div class="row">
-		<label class="field grow"><span class="sr">New team name</span><input autocomplete="off" bind:value={newTeam} placeholder="JV" /></label>
-		<button class="secondary" onclick={createTeam}>Add team</button>
-	</div>
+	<ul class="rlist">
+		{#each teams as t (t.id)}
+			<li>
+				<button class="rrow" onclick={() => editTeam(t)}>
+					<b>{t.name}</b><span class="muted">{rulesName(teamRules(t))}</span><span class="muted">Edit</span>
+				</button>
+			</li>
+		{/each}
+	</ul>
+	<button class="secondary wide" onclick={() => editTeam(null)}>+ Add team</button>
 </main>
 <Tabs />
 
@@ -238,5 +268,20 @@
 				<button class="secondary" onclick={join}>Add</button>
 			</div>
 		{/if}
+	</Sheet>
+{/if}
+
+{#if teamDraft}
+	<Sheet onclose={() => (teamDraft = null)}>
+		<h2>{teamDraft.team ? 'Edit team' : 'New team'}</h2>
+		<label class="field">
+			<span>Name</span>
+			<!-- svelte-ignore a11y_autofocus -->
+			<input autocomplete="off" bind:value={teamDraft.name} placeholder="JV" autofocus={!teamDraft.team} />
+		</label>
+		<RulesEditor bind:draft={teamDraft.rules} />
+		<p class="hint">New games start with these rules. Games already created keep their own.</p>
+		{#if teamErr}<p class="err" role="alert">{teamErr}</p>{/if}
+		<button class="primary wide" onclick={saveTeam}>{teamDraft.team ? 'Save' : 'Add team'}</button>
 	</Sheet>
 {/if}

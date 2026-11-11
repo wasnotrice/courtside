@@ -24,7 +24,7 @@ const remember = (key: string, value: string) => {
 	}
 };
 
-export type Tab = 'today' | 'roster' | 'history' | 'sync';
+export type Tab = 'today' | 'games' | 'roster' | 'history' | 'sync';
 
 export class AppState {
 	tab = $state<Tab>('today');

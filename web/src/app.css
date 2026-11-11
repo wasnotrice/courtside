@@ -159,8 +159,8 @@ tr:last-child td{border-bottom:0}
 .toast.low{bottom:calc(90px + env(safe-area-inset-bottom,0px))}
 @media (prefers-reduced-motion: no-preference){.prow,.k,.tab{transition:background-color .12s}}
 
-/* Added for the sync layer: tabs gain a fourth (Sync), rejections sit next to what they affect. */
-.tabs>div{grid-template-columns:repeat(4,1fr)}
+/* Added for the sync layer and games: five tabs (Practice, Games, Roster, History, Sync), rejections sit next to what they affect. */
+.tabs>div{grid-template-columns:repeat(5,1fr)}
 .reject{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:8px 10px;font-size:14px;font-weight:500;margin:0 12px 10px}
 .reject.standalone{margin:0}
 .reject button{background:none;border:0;color:inherit;font-weight:700;padding:0 2px;text-decoration:underline;flex:none}
