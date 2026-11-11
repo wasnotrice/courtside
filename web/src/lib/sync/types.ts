@@ -174,11 +174,13 @@ export interface MutationArgs {
 	'run.create': Run;
 	'run.set_setup': { id: string; setup: number | null };
 	'run.delete': { id: string };
+	'run.restore': { id: string };
 	'result.set_value': { drill_run_id: string; player_id: string; value: number };
 	'result.set_setup': { drill_run_id: string; player_id: string; setup: number | null };
 	'result.clear': { drill_run_id: string; player_id: string };
 	'game.put': Put<Game>;
 	'game.delete': { id: string };
+	'game.restore': { id: string };
 	'play.put': Put<Play>;
 	'play.delete': { id: string };
 }

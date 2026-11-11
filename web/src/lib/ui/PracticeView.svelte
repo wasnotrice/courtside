@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { lostChanges } from '$lib/sync/restore';
+	import LostNotes from './LostNotes.svelte';
 	import { getApp } from './context.svelte';
 	import {
 		drillsByUse,
@@ -28,7 +30,9 @@
 	// Everyone on the program's rosters for the season this date falls in.
 	const total = $derived(rosterOf(view, program.id, seasonOf(view, app.date)?.id).length);
 	const drills = $derived(drillsByUse(view).filter((d) => d.program_id === program.id && !d.archived));
-	const rejected = $derived(app.sync.snapshot.rejections.length);
+	// Results into a deleted drill run get a note of their own, to restore it.
+	const lostRuns = $derived(lostChanges(app.sync.snapshot.rejections, view).filter((l) => l.kind === 'run'));
+	const rejected = $derived(app.sync.snapshot.rejections.length - lostRuns.reduce((n, l) => n + l.rejections.length, 0));
 
 	// The "Add a drill" sheet.
 	let adding = $state(false);
@@ -104,6 +108,7 @@
 </header>
 
 <main>
+	<LostNotes kind="run" />
 	{#if rejected}
 		<button class="note banner" onclick={() => app.go('sync')}>
 			{rejected} change{rejected === 1 ? ' was' : 's were'} not saved. Review in Sync.

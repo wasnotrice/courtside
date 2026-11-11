@@ -425,12 +425,20 @@ Rejection messages, matched on client and server:
 When another phone deletes a game or a drill run, every change recorded into it
 offline is refused, and dismissing those refusals would lose them for good. Deletes
 are tombstones, so the refusal can offer a way back:
-- "That game was deleted" offers **Restore the game**, which brings the game back (a
-  `game.put` revives a tombstone, as `result.set_setup` already does for results) and
-  queues the refused plays again as new changes.
-- "That drill was removed from the practice" offers **Restore the drill run** the same
-  way, with its results.
-- Dismissing still works; the screen says the changes will be lost.
+- The refusals are grouped by the game or run they went into, one note each, on Games
+  or Practice: "A game was deleted on another phone. 3 changes recorded into it on Wed,
+  Nov 11 weren't saved." with **Restore the game** (or **Restore the drill**).
+- **Restoring** sends `game.restore` or `run.restore` (just the id). The phone never
+  sees deleted rows, so it can't rebuild the game itself: the server revives the row,
+  plus the plays or results deleted along with it (those carrying the delete's
+  version; ones deleted on their own before stay deleted). This needs a connection.
+  Once the game is back on the phone, the refused changes are queued again as new
+  changes, including edits to plays that came back with the game.
+- If the game is already back (another phone restored it), the note offers **Save them
+  again**, which only queues the changes again.
+- An edit to a deleted game is refused ("That game was deleted.") rather than written
+  to the deleted row, so it's grouped and restored the same way.
+- **Dismiss** still works, after a second tap: "Dismissing loses them for good."
 
 ### Undo and history
 

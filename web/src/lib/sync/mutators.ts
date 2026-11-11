@@ -207,6 +207,13 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 		return { ...state, runs, results };
 	},
 
+	// The phone never sees deleted rows, so it can't bring one back itself: the server
+	// does, and the run and its results return with the next pull.
+	'run.restore': (state, args) => {
+		uuid(args.id);
+		return state;
+	},
+
 	'result.set_value': (state, args) => {
 		const run = liveRun(state, args.drill_run_id);
 		const drill = drillFor(state, run);
@@ -286,6 +293,12 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 		const plays = writable(state.plays);
 		for (const p of state.plays.values()) if (p.game_id === args.id) plays.delete(p.id);
 		return { ...state, games, plays };
+	},
+
+	// As run.restore: the game and its plays return with the next pull.
+	'game.restore': (state, args) => {
+		uuid(args.id);
+		return state;
 	},
 
 	// The checks run in the server's order (mutators.ex, put_play), so a play with one
@@ -393,11 +406,13 @@ const FIELDS: { [N in MutationName]: readonly (keyof MutationArgs[N])[] } = {
 	'run.create': ['id', 'program_id', 'date', 'drill_id', 'setup'],
 	'run.set_setup': ['id', 'setup'],
 	'run.delete': ['id'],
+	'run.restore': ['id'],
 	'result.set_value': ['drill_run_id', 'player_id', 'value'],
 	'result.set_setup': ['drill_run_id', 'player_id', 'setup'],
 	'result.clear': ['drill_run_id', 'player_id'],
 	'game.put': ['id', 'team_id', 'date', 'opponent', 'home_away', 'status', 'rules', 'official_us', 'official_them'],
 	'game.delete': ['id'],
+	'game.restore': ['id'],
 	'play.put': [
 		'id',
 		'game_id',

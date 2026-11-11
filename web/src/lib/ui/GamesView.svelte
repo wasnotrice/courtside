@@ -4,7 +4,9 @@
 	import { getApp } from './context.svelte';
 	import { fmtDate, teamsOf } from './domain';
 	import GameSheet from './GameSheet.svelte';
+	import { lostChanges } from '$lib/sync/restore';
 	import { gamesOf, matchup, mismatchText, rulesName, scoresByGame } from './games';
+	import LostNotes from './LostNotes.svelte';
 	import ScopeBar from './ScopeBar.svelte';
 	import SeasonView from './SeasonView.svelte';
 	import StatusPill from './StatusPill.svelte';
@@ -17,7 +19,13 @@
 	const games = $derived(gamesOf(view, program.id, app.season));
 	const scores = $derived(scoresByGame(view));
 	const GAME_CHANGES = ['game.put', 'game.delete', 'play.put', 'play.delete'];
-	const rejections = $derived(app.sync.snapshot.rejections.filter((r) => GAME_CHANGES.includes(r.name)));
+	// Changes into a deleted game get a note of their own, to restore it.
+	const grouped = $derived(
+		new Set(lostChanges(app.sync.snapshot.rejections, view).flatMap((l) => l.rejections.map((r) => r.mutation_id)))
+	);
+	const rejections = $derived(
+		app.sync.snapshot.rejections.filter((r) => GAME_CHANGES.includes(r.name) && !grouped.has(r.mutation_id))
+	);
 
 	const STATUS: Record<Game['status'], string> = { live: 'Live', final: 'Final', reviewed: 'Reviewed' };
 
@@ -50,6 +58,7 @@
 	{#if app.gamesPane === 'season'}
 		<SeasonView />
 	{:else}
+	<LostNotes kind="game" />
 	{#each rejections as r (r.mutation_id)}
 		<div class="reject standalone" role="alert">
 			<span>Not saved ({aboutGame(r.args as Record<string, unknown>)}): {r.reason}</span>

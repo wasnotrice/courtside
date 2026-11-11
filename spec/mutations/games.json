@@ -643,6 +643,166 @@
       "expect": {
         "rejected": "Opponent can't be blank"
       }
+    },
+    {
+      "name": "restoring a game that isn't deleted changes nothing",
+      "mutation": {
+        "name": "game.restore",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a1"
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "restores a deleted game",
+      "with": {
+        "games": [
+          {
+            "id": "a0000000-0000-4000-8000-0000000000a9",
+            "team_id": "e1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-20",
+            "opponent": "Adams",
+            "home_away": "home",
+            "status": "live",
+            "rules": {
+              "periods": 4,
+              "period_minutes": 8,
+              "overtime_minutes": 4,
+              "team_fouls_reset": "period",
+              "bonus_at": 5,
+              "bonus": "two_shots",
+              "double_bonus_at": null,
+              "foul_out_at": 5,
+              "technicals_to_eject": 2
+            },
+            "official_us": null,
+            "official_them": null,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "game.restore",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a9"
+        }
+      },
+      "expect": {
+        "rows": {
+          "games": [
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a1",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Lincoln",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            },
+            {
+              "id": "a0000000-0000-4000-8000-0000000000a9",
+              "team_id": "e1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-20",
+              "opponent": "Adams",
+              "home_away": "home",
+              "status": "live",
+              "rules": {
+                "periods": 4,
+                "period_minutes": 8,
+                "overtime_minutes": 4,
+                "team_fouls_reset": "period",
+                "bonus_at": 5,
+                "bonus": "two_shots",
+                "double_bonus_at": null,
+                "foul_out_at": 5,
+                "technicals_to_eject": 2
+              },
+              "official_us": null,
+              "official_them": null
+            }
+          ]
+        }
+      },
+      "known_difference": "The client never sees deleted rows, so its game.restore changes nothing; the game returns with the next pull. Covered in server/test/courtside/sync_test.exs, with the plays deleted along with it."
+    },
+    {
+      "name": "an edit to a deleted game is refused",
+      "with": {
+        "games": [
+          {
+            "id": "a0000000-0000-4000-8000-0000000000a9",
+            "team_id": "e1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-20",
+            "opponent": "Adams",
+            "home_away": "home",
+            "status": "live",
+            "rules": {
+              "periods": 4,
+              "period_minutes": 8,
+              "overtime_minutes": 4,
+              "team_fouls_reset": "period",
+              "bonus_at": 5,
+              "bonus": "two_shots",
+              "double_bonus_at": null,
+              "foul_out_at": 5,
+              "technicals_to_eject": 2
+            },
+            "official_us": null,
+            "official_them": null,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "game.put",
+        "args": {
+          "id": "a0000000-0000-4000-8000-0000000000a9",
+          "status": "final"
+        }
+      },
+      "expect": {
+        "rejected": "That game was deleted."
+      },
+      "known_difference": "The client never sees deleted rows, so it treats the edit as a new game and refuses it for another reason (no team). Either way it's refused."
     }
   ]
 }

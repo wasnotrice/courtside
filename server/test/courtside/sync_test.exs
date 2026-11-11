@@ -9,7 +9,7 @@ defmodule Courtside.SyncTest do
   import ExUnit.CaptureLog
 
   alias Courtside.{Organizations, Sync}
-  alias Courtside.Schema.{DrillRun, Player, Result}
+  alias Courtside.Schema.{DrillRun, Game, Play, Player, Result}
 
   @client "client-a"
 
@@ -291,6 +291,101 @@ defmodule Courtside.SyncTest do
 
       push!(org.org, @client, [{"result.set_value", Map.put(key, :value, 41)}], 6)
       assert %Result{deleted: false, value: 41.0} = Repo.get_by!(Result, drill_run_id: ids.run)
+    end
+  end
+
+  describe "restoring" do
+    defp game!(org, client) do
+      game = uuid()
+
+      push!(org.org, client, [
+        {"game.put", %{id: game, team_id: org.team, date: "2026-11-20", opponent: "Lincoln"}}
+      ])
+
+      game
+    end
+
+    defp play(game, n),
+      do: %{
+        id: uuid(),
+        game_id: game,
+        side: "us",
+        stat: "dreb",
+        period: 1,
+        position: "p#{n}",
+        recorded_at: n
+      }
+
+    test "game.restore brings back the game and the plays deleted with it", %{org: org} do
+      game = game!(org, @client)
+      [kept, gone_before, refused] = for n <- 1..3, do: play(game, n)
+      push!(org.org, @client, [{"play.put", kept}, {"play.put", gone_before}], 2)
+      push!(org.org, @client, [{"play.delete", %{id: gone_before.id}}], 4)
+
+      # Another phone deletes the game; a play recorded offline is refused.
+      push!(org.org, "client-b", [{"game.delete", %{id: game}}])
+      %{cursor: cursor} = pull!(org.org, @client)
+      result = push!(org.org, @client, [{"play.put", refused}], 5)
+      assert [%{reason: "That game was deleted."}] = result.rejections
+
+      assert %{rejections: []} = push!(org.org, @client, [{"game.restore", %{id: game}}], 6)
+      assert %Game{deleted: false} = Repo.get!(Game, game)
+      assert %Play{deleted: false} = Repo.get!(Play, kept.id)
+      # Deleted on its own before the game was: stays deleted.
+      assert %Play{deleted: true} = Repo.get!(Play, gone_before.id)
+
+      %{changes: changes} = pull!(org.org, @client, cursor)
+      assert [%{id: ^game, deleted: false}] = changes.games
+      assert [%{id: kept_id, deleted: false}] = changes.plays
+      assert kept_id == kept.id
+
+      # The refused play can now be sent again.
+      assert %{rejections: []} = push!(org.org, @client, [{"play.put", refused}], 7)
+    end
+
+    test "restoring a game that isn't deleted changes nothing", %{org: org} do
+      game = game!(org, @client)
+      before = Repo.get!(Game, game).version
+      assert %{rejections: []} = push!(org.org, @client, [{"game.restore", %{id: game}}], 2)
+      assert Repo.get!(Game, game).version == before
+    end
+
+    test "restoring an unknown game is refused", %{org: org} do
+      result = push!(org.org, @client, [{"game.restore", %{id: uuid()}}])
+      assert [%{reason: "That game no longer exists."}] = result.rejections
+    end
+
+    test "an edit to a deleted game is refused", %{org: org} do
+      game = game!(org, @client)
+      push!(org.org, "client-b", [{"game.delete", %{id: game}}])
+      result = push!(org.org, @client, [{"game.put", %{id: game, status: "final"}}], 2)
+      assert [%{reason: "That game was deleted."}] = result.rejections
+      assert %Game{status: "live"} = Repo.get!(Game, game)
+    end
+
+    test "run.restore brings back the run and the results deleted with it", %{org: org} do
+      ids = seed!(org, @client)
+      bea = player(org, "Bea")
+
+      push!(
+        org.org,
+        @client,
+        [
+          {"player.put", bea},
+          {"result.set_value", %{drill_run_id: ids.run, player_id: ids.player, value: 38}},
+          {"result.set_value", %{drill_run_id: ids.run, player_id: bea.id, value: 30}},
+          {"result.clear", %{drill_run_id: ids.run, player_id: bea.id}}
+        ],
+        4
+      )
+
+      push!(org.org, "client-b", [{"run.delete", %{id: ids.run}}])
+      assert %{rejections: []} = push!(org.org, @client, [{"run.restore", %{id: ids.run}}], 8)
+
+      assert %DrillRun{deleted: false} = Repo.get!(DrillRun, ids.run)
+      assert %Result{deleted: false, value: 38.0} = Repo.get_by!(Result, player_id: ids.player)
+      # Cleared before the run was deleted: stays cleared.
+      assert %Result{deleted: true} = Repo.get_by!(Result, player_id: bea.id)
     end
   end
 

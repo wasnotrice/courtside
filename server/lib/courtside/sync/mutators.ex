@@ -60,11 +60,13 @@ defmodule Courtside.Sync.Mutators do
     "run.create" => ~w(id program_id date drill_id setup),
     "run.set_setup" => ~w(id setup),
     "run.delete" => ~w(id),
+    "run.restore" => ~w(id),
     "result.set_value" => ~w(drill_run_id player_id value),
     "result.set_setup" => ~w(drill_run_id player_id setup),
     "result.clear" => ~w(drill_run_id player_id),
     "game.put" => ~w(id team_id date opponent home_away status rules official_us official_them),
     "game.delete" => ~w(id),
+    "game.restore" => ~w(id),
     "play.put" =>
       ~w(id game_id side player_id stat foul_type assist_player_id drawn_by_player_id period clock video_at position recorded_at),
     "play.delete" => ~w(id)
@@ -99,11 +101,13 @@ defmodule Courtside.Sync.Mutators do
   defp dispatch("run.create", args, ctx), do: create_run(args, ctx)
   defp dispatch("run.set_setup", args, ctx), do: set_run_setup(args, ctx)
   defp dispatch("run.delete", args, ctx), do: delete_run(args, ctx)
+  defp dispatch("run.restore", args, ctx), do: restore_run(args, ctx)
   defp dispatch("result.set_value", args, ctx), do: set_result_value(args, ctx)
   defp dispatch("result.set_setup", args, ctx), do: set_result_setup(args, ctx)
   defp dispatch("result.clear", args, ctx), do: clear_result(args, ctx)
   defp dispatch("game.put", args, ctx), do: put_game(args, ctx)
   defp dispatch("game.delete", args, ctx), do: delete_game(args, ctx)
+  defp dispatch("game.restore", args, ctx), do: restore_game(args, ctx)
   defp dispatch("play.put", args, ctx), do: put_play(args, ctx)
   defp dispatch("play.delete", args, ctx), do: delete_play(args, ctx)
 
@@ -378,6 +382,15 @@ defmodule Courtside.Sync.Mutators do
     end
   end
 
+  # Brings back a deleted run with the results deleted along with it: those carry the
+  # delete's version. Results cleared before the delete stay cleared.
+  defp restore_run(%{"id" => id}, ctx) do
+    with {:ok, run} <- fetch_tombstone(DrillRun, id, ctx, "That drill run no longer exists."),
+         {:ok, _drill} <- fetch_live(Drill, run.drill_id, ctx, "That drill no longer exists.") do
+      restore(run, Result, :drill_run_id, "results_restored", ctx)
+    end
+  end
+
   # --- results --------------------------------------------------------------
 
   defp set_result_value(args, ctx) do
@@ -463,6 +476,8 @@ defmodule Courtside.Sync.Mutators do
 
   defp put_game(args, ctx) do
     with {:ok, existing} <- load_for_put(Game, args["id"], ctx),
+         :ok <-
+           if(existing && existing.deleted, do: {:error, "That game was deleted."}, else: :ok),
          {:ok, team} <-
            fetch_live(
              Team,
@@ -538,6 +553,32 @@ defmodule Courtside.Sync.Mutators do
         with {:ok, log} <- game |> change(deleted: true) |> save(ctx),
              do: {:ok, put_in(log.changes["plays_deleted"], [0, count])}
     end
+  end
+
+  # Brings back a deleted game with the plays deleted along with it: those carry the
+  # delete's version. Plays deleted one at a time before that stay deleted.
+  defp restore_game(%{"id" => id}, ctx) do
+    with {:ok, game} <- fetch_tombstone(Game, id, ctx, "That game no longer exists."),
+         {:ok, _team} <- fetch_live(Team, game.team_id, ctx, "That team no longer exists.") do
+      restore(game, Play, :game_id, "plays_restored", ctx)
+    end
+  end
+
+  # Restoring something that isn't deleted (restored already, or by another phone)
+  # changes nothing.
+  defp restore(%{deleted: false}, _child, _key, _label, _ctx), do: :ok
+
+  defp restore(row, child, key, label, ctx) do
+    {count, _} =
+      from(c in child,
+        where: field(c, ^key) == ^row.id and c.deleted and c.version == ^row.version
+      )
+      |> Repo.update_all(
+        set: [deleted: false, version: ctx.version, updated_at: DateTime.utc_now(:second)]
+      )
+
+    with {:ok, log} <- row |> change(deleted: false) |> save(ctx),
+         do: {:ok, put_in(log.changes[label], [0, count])}
   end
 
   @play_fields [
@@ -697,6 +738,18 @@ defmodule Courtside.Sync.Mutators do
 
     with {:ok, uuid} <- Ecto.UUID.cast(id || ""),
          %{deleted: false, organization_id: ^org} = row <- Repo.get(schema, uuid) do
+      {:ok, row}
+    else
+      _ -> {:error, message}
+    end
+  end
+
+  # A row in the push's organization, deleted or not, or {:error, message}.
+  defp fetch_tombstone(schema, id, ctx, message) do
+    org = ctx.organization_id
+
+    with {:ok, uuid} <- Ecto.UUID.cast(id || ""),
+         %{organization_id: ^org} = row <- Repo.get(schema, uuid) do
       {:ok, row}
     else
       _ -> {:error, message}

@@ -47,7 +47,9 @@ export class FakeServer {
 			if (m.id <= last) continue;
 			const before = this.live();
 			try {
-				this.write(before, apply(before, m), version);
+				if (m.name === 'game.restore') this.revive('games', 'plays', 'game_id', m.args.id, version, 'That game no longer exists.');
+				else if (m.name === 'run.restore') this.revive('runs', 'results', 'drill_run_id', m.args.id, version, 'That drill run no longer exists.');
+				else this.write(before, apply(before, m), version);
 			} catch (e) {
 				const reason = e instanceof MutationError ? e.message : 'The server could not apply this change.';
 				this.rejections.push({ client_id, mutation_id: m.id, name: m.name, args: m.args as never, reason, version });
@@ -132,6 +134,19 @@ export class FakeServer {
 		};
 	}
 
+	// game.restore and run.restore, as the server does them: the row comes back with the
+	// children deleted along with it (those that carry the delete's version). The
+	// client mutators can't do this, since a phone never sees deleted rows.
+	private revive(table: 'games' | 'runs', children: 'plays' | 'results', key: string, id: string, version: number, missing: string) {
+		const row = (this.tables[table] as Map<string, Row>).get(id) ?? fail(missing);
+		if (!row.deleted) return;
+		const kids = this.tables[children] as unknown as Map<string, Row & Record<string, unknown>>;
+		for (const [k, child] of kids) {
+			if (child[key] === id && child.deleted && child.version === row.version) kids.set(k, { ...child, deleted: false, version });
+		}
+		(this.tables[table] as Map<string, Row>).set(id, { ...row, deleted: false, version });
+	}
+
 	// Stamps every row the mutation added or changed, and tombstones removed ones.
 	private write(before: State, after: State, version: number) {
 		for (const name of Object.keys(this.tables) as (keyof State)[]) {
@@ -147,5 +162,9 @@ export class FakeServer {
 		}
 	}
 }
+
+const fail = (reason: string): never => {
+	throw new MutationError(reason);
+};
 
 const strip = ({ client_id: _c, version: _v, ...r }: Rejection & { client_id: string; version: number }) => r;

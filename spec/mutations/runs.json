@@ -537,6 +537,19 @@
           ]
         }
       }
+    },
+    {
+      "name": "restoring an unknown run is refused on the server",
+      "mutation": {
+        "name": "run.restore",
+        "args": {
+          "id": "c9999999-9999-4999-8999-999999999999"
+        }
+      },
+      "expect": {
+        "rejected": "That drill run no longer exists."
+      },
+      "known_difference": "The client never sees deleted rows, so it can't tell an unknown run from a deleted one and leaves the answer to the server. Covered in server/test/courtside/sync_test.exs."
     }
   ]
 }
