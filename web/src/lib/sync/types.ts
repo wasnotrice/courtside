@@ -99,14 +99,20 @@ export const emptyState = (): State => ({
 
 // --- mutations ---------------------------------------------------------------
 
+/**
+ * A put creates the row when the id is new (and then needs the required fields)
+ * and otherwise changes only the fields sent. Send just the fields that changed.
+ */
+type Put<T extends { id: string }> = Pick<T, 'id'> & { [K in Exclude<keyof T, 'id'>]?: T[K] | null };
+
 export interface MutationArgs {
-	'program.put': Program;
-	'season.put': Season;
-	'team.put': Team;
-	'player.put': Player;
-	'roster.put': RosterEntry;
+	'program.put': Put<Program>;
+	'season.put': Put<Season>;
+	'team.put': Put<Team>;
+	'player.put': Put<Player>;
+	'roster.put': Put<RosterEntry>;
 	'roster.remove': { id: string };
-	'drill.put': Drill;
+	'drill.put': Put<Drill>;
 	'run.create': Run;
 	'run.set_setup': { id: string; setup: number | null };
 	'run.delete': { id: string };

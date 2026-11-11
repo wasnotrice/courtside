@@ -10,6 +10,11 @@ defmodule Courtside.Sync.Mutators do
   stamped with it. Once sign-in exists, the context also carries the user, and
   permission checks belong here.
 
+  A `*.put` mutation creates its row when the id is new (and then needs the
+  required fields) and otherwise changes only the fields it sends, so edits to
+  different fields on different devices don't overwrite each other. A field
+  sent as null is set to null; a field left out keeps its value.
+
   The client has matching mutators in `web/src/lib/sync/mutators.ts` so it can
   show results instantly; when the two disagree, the server wins. The shared
   cases in `spec/mutations/` keep them in step.
@@ -132,7 +137,7 @@ defmodule Courtside.Sync.Mutators do
 
   defp put_team(args, ctx) do
     with {:ok, existing} <- load_for_put(Team, args["id"], ctx),
-         {:ok, _program} <- fetch_program(args, ctx) do
+         {:ok, _program} <- fetch_program(args, existing, ctx) do
       (existing || %Team{id: args["id"], organization_id: ctx.organization_id})
       |> cast(args, [:program_id, :name])
       |> trim_name()
@@ -147,7 +152,7 @@ defmodule Courtside.Sync.Mutators do
 
   defp put_player(args, ctx) do
     with {:ok, existing} <- load_for_put(Player, args["id"], ctx),
-         {:ok, _program} <- fetch_program(args, ctx) do
+         {:ok, _program} <- fetch_program(args, existing, ctx) do
       (existing || %Player{id: args["id"], organization_id: ctx.organization_id})
       |> cast(args, [:program_id, :name])
       |> trim_name()
@@ -161,13 +166,29 @@ defmodule Courtside.Sync.Mutators do
   defp put_roster_entry(args, ctx) do
     with {:ok, existing} <- load_for_put(RosterEntry, args["id"], ctx),
          :ok <- check_entry_unmoved(existing, args),
-         {:ok, team} <- fetch_live(Team, args["team_id"], ctx, "That team no longer exists."),
-         {:ok, _season} <-
-           fetch_live(Season, args["season_id"], ctx, "That season no longer exists."),
+         {:ok, team} <-
+           fetch_live(
+             Team,
+             sent_or_stored(args, existing, :team_id),
+             ctx,
+             "That team no longer exists."
+           ),
+         {:ok, season} <-
+           fetch_live(
+             Season,
+             sent_or_stored(args, existing, :season_id),
+             ctx,
+             "That season no longer exists."
+           ),
          {:ok, player} <-
-           fetch_live(Player, args["player_id"], ctx, "That player no longer exists."),
+           fetch_live(
+             Player,
+             sent_or_stored(args, existing, :player_id),
+             ctx,
+             "That player no longer exists."
+           ),
          :ok <- same_program(player, team, "That player is in a different program."),
-         :ok <- check_not_on_roster(args, ctx) do
+         :ok <- check_not_on_roster(args["id"], team, season, player, ctx) do
       (existing || %RosterEntry{id: args["id"], organization_id: ctx.organization_id})
       |> cast(args, [:team_id, :season_id, :player_id, :jersey])
       |> default_if_nil(:jersey, "")
@@ -184,20 +205,25 @@ defmodule Courtside.Sync.Mutators do
 
   defp check_entry_unmoved(nil, _args), do: :ok
 
+  # Only the fields sent can move it; fields left out keep their values.
   defp check_entry_unmoved(entry, args) do
-    if entry.team_id == args["team_id"] and entry.season_id == args["season_id"] and
-         entry.player_id == args["player_id"],
-       do: :ok,
-       else: {:error, "A roster entry can't move. Remove it and add a new one."}
+    moved =
+      Enum.any?([:team_id, :season_id, :player_id], fn field ->
+        sent_or_stored(args, entry, field) != Map.fetch!(entry, field)
+      end)
+
+    if moved,
+      do: {:error, "A roster entry can't move. Remove it and add a new one."},
+      else: :ok
   end
 
-  defp check_not_on_roster(args, ctx) do
+  defp check_not_on_roster(id, team, season, player, ctx) do
     taken =
       from(e in RosterEntry,
         where:
           e.organization_id == ^ctx.organization_id and not e.deleted and
-            e.team_id == ^args["team_id"] and e.season_id == ^args["season_id"] and
-            e.player_id == ^args["player_id"] and e.id != ^args["id"]
+            e.team_id == ^team.id and e.season_id == ^season.id and
+            e.player_id == ^player.id and e.id != ^id
       )
       |> Repo.exists?()
 
@@ -215,7 +241,7 @@ defmodule Courtside.Sync.Mutators do
 
   defp put_drill(args, ctx) do
     with {:ok, existing} <- load_for_put(Drill, args["id"], ctx),
-         {:ok, _program} <- fetch_program(args, ctx) do
+         {:ok, _program} <- fetch_program(args, existing, ctx) do
       (existing || %Drill{id: args["id"], organization_id: ctx.organization_id})
       |> cast(args, [:program_id, :name, :kind, :default_setup, :archived])
       |> trim_name()
@@ -230,7 +256,7 @@ defmodule Courtside.Sync.Mutators do
   end
 
   defp create_run(args, ctx) do
-    with {:ok, program} <- fetch_program(args, ctx),
+    with {:ok, program} <- fetch_program(args, nil, ctx),
          {:ok, drill} <- fetch_live(Drill, args["drill_id"], ctx, "That drill no longer exists."),
          :ok <- same_program(drill, program, "That drill is in a different program."),
          :ok <- check_new_id(DrillRun, args["id"], ctx) do
@@ -406,8 +432,22 @@ defmodule Courtside.Sync.Mutators do
     end
   end
 
-  defp fetch_program(args, ctx),
-    do: fetch_live(Program, args["program_id"], ctx, "That program no longer exists.")
+  defp fetch_program(args, existing, ctx),
+    do:
+      fetch_live(
+        Program,
+        sent_or_stored(args, existing, :program_id),
+        ctx,
+        "That program no longer exists."
+      )
+
+  # A field's value after a put: the one sent, or the stored one if it was left out.
+  defp sent_or_stored(args, existing, field) do
+    case Map.fetch(args, Atom.to_string(field)) do
+      {:ok, value} -> value
+      :error -> existing && Map.fetch!(existing, field)
+    end
+  end
 
   # A live row in the push's organization, or {:error, message}. Rows in other
   # organizations are invisible: referring to one gets the same message as
