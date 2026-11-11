@@ -3,6 +3,7 @@
 	import { AppState, setApp } from './context.svelte';
 	import EntryView from './EntryView.svelte';
 	import GamesView from './GamesView.svelte';
+	import LiveView from './LiveView.svelte';
 	import HistoryView from './HistoryView.svelte';
 	import PracticeView from './PracticeView.svelte';
 	import ProgramSetup from './ProgramSetup.svelte';
@@ -18,6 +19,10 @@
 	$effect(() => {
 		if (app.runId && !app.view.runs.has(app.runId)) app.runId = null;
 	});
+	// Likewise a deleted game closes its live screen.
+	$effect(() => {
+		if (app.gameId && !app.view.games.has(app.gameId)) app.gameId = null;
+	});
 </script>
 
 <div class="wrap-app">
@@ -26,6 +31,10 @@
 	{:else if app.tab === 'today' && app.runId && app.view.runs.has(app.runId)}
 		{#key app.runId}
 			<EntryView runId={app.runId} />
+		{/key}
+	{:else if app.tab === 'games' && app.gameId && app.view.games.has(app.gameId)}
+		{#key app.gameId}
+			<LiveView gameId={app.gameId} />
 		{/key}
 	{:else if app.tab === 'games'}
 		<GamesView />
@@ -41,5 +50,5 @@
 </div>
 
 {#if app.toast}
-	<div class="toast" class:low={!(app.tab === 'today' && app.runId)} role="status">{app.toast}</div>
+	<div class="toast" class:low={!(app.tab === 'today' && app.runId) && !(app.tab === 'games' && app.gameId)} role="status">{app.toast}</div>
 {/if}

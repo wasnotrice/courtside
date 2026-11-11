@@ -30,6 +30,8 @@ export class AppState {
 	tab = $state<Tab>('today');
 	date = $state(todayISO());
 	runId = $state<string | null>(null);
+	/** The game whose live screen is open, on the Games tab. */
+	gameId = $state<string | null>(null);
 	historyDrill = $state<string | null>(null);
 	toast = $state('');
 	private programId = $state(remembered('program'));
@@ -65,6 +67,7 @@ export class AppState {
 		this.programId = id;
 		remember('program', id);
 		this.runId = null;
+		this.gameId = null;
 	}
 
 	chooseSeason(id: string) {
@@ -93,6 +96,14 @@ export class AppState {
 	go(tab: Tab) {
 		this.tab = tab;
 		this.runId = null;
+		this.gameId = null;
+		window.scrollTo(0, 0);
+	}
+
+	openGame(gameId: string) {
+		if (!this.view.games.has(gameId)) return;
+		this.tab = 'games';
+		this.gameId = gameId;
 		window.scrollTo(0, 0);
 	}
 

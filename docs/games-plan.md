@@ -361,7 +361,9 @@ Rejection messages, matched on client and server:
 │  FT ✓  FT ✗   2 ✓  2 ✗   3 ✓  3 ✗  │  ← then the stat
 │  OREB  DREB  STL  BLK  TO  F       │
 ├────────────────────────────────────┤
-│ Them: +1 FT✗ +2 +3 miss DREB OREB TO F │
+│ Them                               │
+│  FT ✓  FT ✗   2 ✓  2 ✗   3 ✓  3 ✗  │  ← the same pad, team only
+│  OREB  DREB  STL  BLK  TO  F       │
 ├────────────────────────────────────┤
 │ Assist? [players…]          [skip] │  ← follow-up prompt
 ├────────────────────────────────────┤
@@ -379,11 +381,16 @@ Rejection messages, matched on client and server:
   - after our make: "Assist?" with players;
   - after any miss: "Rebound?" with players, Team or Them;
   - after our F: "Offensive / Technical / Flagrant";
-  - after their F: "Fouled?" with players.
+  - after their F: "Fouled?" with players;
+  - steals and turnovers, and blocks and missed shots, are pairs, and whichever half
+    is recorded asks for the other: after our TO, "Stolen?"; after their STL,
+    "Turnover by?"; after a missed field goal, the rebound question also offers
+    "Blocked" (and asks who, if it was ours); after a block, the shot it stopped (whose,
+    if ours, then 2 or 3), placed just before the block, then the rebound.
 - **Foul counts on each player button**; the bonus shows beside team fouls, from the
   game's rules.
-- **`Them: miss`** records a two-point miss, because nobody can tell a 2 from a 3 on a
-  miss in real time.
+- **The other team gets the same stat pad as ours,** every button in the same place,
+  so the scorer's hands learn one layout. Their plays are team only: no player.
 - **Every tap is saved on the phone before the screen shows it.** A test closes and
   reopens the app mid-game.
 - **Undo** reverses this phone's last change, synced or not, and says what it
