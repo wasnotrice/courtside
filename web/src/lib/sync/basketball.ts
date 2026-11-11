@@ -37,8 +37,8 @@ export interface Rules {
 /**
  * The rules a game uses when neither it nor its team says otherwise.
  *
- * PROVISIONAL: believed to be the current NFHS high school rules. Check them against
- * the rule book before games ship (plan, phase 2 step 4).
+ * The current NFHS high school rules, checked against the NCAA's "2025-26 NCAA/NFHS
+ * Major Basketball Rules Differences" (docs/research/basketball-rules.md).
  */
 export const DEFAULT_RULES: Rules = {
 	periods: 4,

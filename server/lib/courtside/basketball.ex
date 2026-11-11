@@ -16,9 +16,10 @@ defmodule Courtside.Basketball do
   @doc """
   The rules a game uses when neither it nor its team says otherwise.
 
-  PROVISIONAL: these are believed to be the current NFHS high school rules (4 × 8-minute
-  quarters, team fouls reset each quarter, two shots from the 5th). Check them against
-  the rule book before games ship (plan, phase 2 step 4).
+  The current NFHS high school rules: 4 × 8-minute quarters, 4-minute overtime, two
+  shots from the 5th team foul in a quarter (no one-and-one), out on the 5th foul,
+  ejected on the 2nd technical. Checked against the NCAA's "2025-26 NCAA/NFHS Major
+  Basketball Rules Differences" (docs/research/basketball-rules.md).
   """
   def default_rules do
     %{
