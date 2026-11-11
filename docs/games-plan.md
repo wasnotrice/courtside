@@ -240,6 +240,11 @@ Get today's app running in the iOS simulator inside Tauri 2, and check:
 The sandbox can build for the simulator but can't sign builds, so a run on a real phone
 is on Eric's side. If a check fails, phase 3 changes before phase 2 builds on it.
 
+**Done (2026-11-09): it works.** See [`research/tauri-spike.md`](research/tauri-spike.md).
+In the iOS simulator, the unchanged app synced with Phoenix, got pokes, and kept its
+IndexedDB data across restarts, an update and a launch with the server down. The web
+wake lock was refused; phase 3 below lists the fixes. Code on branch `spike/tauri`.
+
 ### LiveStore for games (two to three days)
 
 The question: is an event-sourced library with no server authority a better fit for
@@ -261,6 +266,12 @@ undo) on LiveStore, behind the same engine surface the UI uses (`snapshot`, `sub
 **Deciding:** if LiveStore is clearly better for plays, phase 2's sync work (steps 1–3)
 is replanned around it before it starts. Otherwise phase 2 goes ahead as written, and
 the write-up records why.
+
+**Done (2026-11-09): stay hand-rolled.** See
+[`research/livestore-spike.md`](research/livestore-spike.md). LiveStore handled offline
+plays well, but its sync protocol has no way for the server to refuse a change, rules
+depend on every phone's app version, and a phone can't tell it's unsynced. Phase 2 goes
+ahead as written. The spike's code is on branch `spike/livestore`.
 
 ---
 
@@ -375,8 +386,8 @@ Rejection messages, matched on client and server:
   miss in real time.
 - **Every tap is saved on the phone before the screen shows it.** A test closes and
   reopens the app mid-game.
-- **Undo** deletes the last play this phone added, synced or not, and says what it
-  removed.
+- **Undo** reverses this phone's last change, synced or not, and says what it
+  removed (see "Undo and history").
 - **No lineups or running clock.** The screen stays awake, as drill entry does.
 - **Unsynced warning at the end of a game.** Marking a game final, or leaving the live
   screen, with plays still unsynced shows how many and asks the scorer to get signal
@@ -414,6 +425,48 @@ are tombstones, so the refusal can offer a way back:
   way, with its results.
 - Dismissing still works; the screen says the changes will be lost.
 
+### Undo and history
+
+The phone keeps no history: once the server confirms a change and the next pull
+arrives, the old value is gone from the phone. So undo and history come from two
+places, and both end by sending an ordinary change through sync, checked by the
+rules like any other.
+
+**Undo (on the phone, offline, recent changes only).** The only moment the phone
+reliably knows a field's old value is when the change is made. So `AppState.mutate`
+records each change's *reverse* at that moment, from the current view:
+- adding a play, a drill run or a roster entry: the reverse deletes or removes it;
+- an edit (`*.put`, `result.set_value`, `result.set_setup`): the reverse is the same
+  change with the fields' current values, sending only those fields.
+
+Reverses live in memory, newest first, for the screen they were made on; reloading
+the app clears them. Undo sends the reverse rather than pulling the change out of the
+queue, because the change may already be on its way to the server or confirmed. If
+someone else changed the same field in between, undo overwrites theirs (the last
+change to reach the server wins); on the live screen, with one scorer, that's rare.
+
+**History (on the server, online, any change by anyone).** An append-only
+`change_log` table, written in the same transaction as each push:
+- organization, version, client, mutation id and name, and (once sign-in exists) user;
+- the arguments, and whether the change was accepted or refused, with the reason;
+- for accepted changes, each changed field's value before and after, from the Ecto
+  changeset.
+
+It isn't sent to phones in sync: pull stays "the current rows", phones don't carry a
+growing log, and student data stays on the server. `GET /api/history` returns a row's
+entries newest first (and later a game's edits, or recent changes for the
+organization), filtered like pull. Phones show it when online and say "History needs a
+connection" when not.
+
+- **Revert from history** sends the entry's before values as an ordinary change. If
+  the field has changed since, the sheet warns first ("Changed again since, to 44 by
+  the assistant's phone. Revert anyway?").
+- The log is a record, not a source to rebuild rows from: old changes ran under old
+  rules.
+- **Deleting a student's data** must blank their name and arguments in the log too;
+  write that purge before Courtside becomes a product.
+- **Size:** about 256 bytes per change, a few MB per program per season.
+
 ### Season totals and comparing practice to games
 
 - Season totals for each player across a team's games, with per-game averages.
@@ -437,7 +490,10 @@ are tombstones, so the refusal can offer a way back:
   - ordering by position.
 - **Server tests:** each rule above; an edit to a deleted play is rejected; deleting a
   game tombstones its plays; the database checks back up the side and player rule and
-  the assist rule.
+  the assist rule; every push writes the change log, accepted and refused, with before
+  and after values; history is filtered by organization.
+- **Undo tests:** the reverse of each kind of change restores the view exactly,
+  offline; undoing a change that has already synced sends a reverse change.
 - **Engine tests:**
   - a film edit on one phone while another phone is offline, then both sync;
   - an edit to a play another phone deleted is rejected, and the play stays gone;
@@ -449,7 +505,8 @@ are tombstones, so the refusal can offer a way back:
 
 ### Steps (one commit each)
 
-1. Server: migration, schemas, mutators, the `basketball` validation module, pull and tests.
+1. Server: migration, schemas, mutators, the `basketball` validation module, pull and
+   tests; the change log and `GET /api/history`.
 2. Client sync layer: types, mutators, stores, fake server and engine tests.
 3. The replay performance check, and the fix if it's needed.
 4. Client `basketball` module: rules presets (after checking the rule books), box
@@ -459,7 +516,9 @@ are tombstones, so the refusal can offer a way back:
 7. UI: the review screen, box score, official score and mismatch flag.
 8. UI: season totals and comparing practice to games.
 9. Restoring a deleted game or drill run from a refusal, with engine tests.
-10. Docs, then the end-to-end run.
+10. Undo (reverses captured in `AppState.mutate`) on the live and entry screens, and a
+    history sheet with revert on the review and roster screens.
+11. Docs, then the end-to-end run.
 
 ---
 
@@ -481,6 +540,18 @@ static SvelteKit build. The steps depend on the spike's findings; the outline:
   sign builds.
 - **Without sign-in, the app reaches the server over the tailnet,** with the Tailscale
   app on the phone. A server outside the tailnet waits for phase 4.
+
+From the spike:
+- **Safe areas:** `viewport-fit=cover` and `env(safe-area-inset-*)` padding; the header
+  currently draws under the status bar.
+- **Keep the screen awake natively** (a small plugin setting
+  `UIApplication.isIdleTimerDisabled` while the entry or live screen is open). The web
+  Wake Lock request was refused in the web view.
+- **Storage message:** the "add to the home screen" advice is for the browser only.
+- **Production socket origin:** Phoenix's `check_origin` must allow `tauri://localhost`.
+- **HTTPS to the server** over the tailnet; plain HTTP to other hosts is blocked by App
+  Transport Security unless exempted.
+- **CocoaPods** on the build Mac, or the empty-Podfile workaround (see the write-up).
 
 ---
 

@@ -142,7 +142,8 @@ every commit.
 Known follow-ups, not urgent:
 - Several tabs open on one device: share state through a `BroadcastChannel` or a lock.
 - Cleaning up old tombstones.
-- Showing a "last edited by" when two coaches disagree on a value.
+- "Last edited by" is covered by the change log in phase 2 (see the plan's "Undo and
+  history").
 - The season picker is an unstyled native `<select>`.
 - On the entry screen with a team filter, the summary line still covers the whole
   drill run.
