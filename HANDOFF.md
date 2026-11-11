@@ -2,6 +2,13 @@
 
 You're picking up a half-built project. Read this whole file before changing anything.
 
+> **Superseded where they disagree.** A design review with the coach on 2026-11-07
+> replaced parts of this file, including its "don't reopen" decisions and the ban on
+> sync libraries. Where this file disagrees with these, they win:
+> [`docs/games-plan.md`](docs/games-plan.md), [`GLOSSARY.md`](GLOSSARY.md) and
+> [`docs/adr/`](docs/adr/). Keeping the sync hand-rolled is now a choice made on its
+> merits (server authority, offline writes, Phoenix), not a rule.
+
 ## What this is
 
 A practice stat tracker for a high school basketball team. During practice, players
