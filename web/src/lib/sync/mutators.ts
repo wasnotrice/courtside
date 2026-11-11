@@ -136,10 +136,35 @@ const mutators: { [N in MutationName]: Mutator<N> } = {
 	}
 };
 
+/**
+ * The arguments each mutation accepts. Anything else is refused rather than
+ * ignored, on both sides, so a field name the two disagree on fails loudly
+ * instead of being dropped by the server. Matches @fields in mutators.ex.
+ */
+const FIELDS: { [N in MutationName]: readonly (keyof MutationArgs[N])[] } = {
+	'player.put': ['id', 'name', 'jersey', 'active'],
+	'drill.put': ['id', 'name', 'kind', 'default_setup', 'archived'],
+	'run.create': ['id', 'date', 'drill_id', 'setup'],
+	'run.set_setup': ['id', 'setup'],
+	'run.delete': ['id'],
+	'result.set_value': ['drill_run_id', 'player_id', 'value'],
+	'result.set_setup': ['drill_run_id', 'player_id', 'setup'],
+	'result.clear': ['drill_run_id', 'player_id']
+};
+
 /** Applies one mutation, or throws MutationError with the reason it doesn't apply. */
 export function apply(state: State, mutation: MutationInput): State {
 	const mutator = mutators[mutation.name] as Mutator<MutationName> | undefined;
 	if (!mutator) fail(`Unknown change type: ${mutation.name}`);
+
+	const args: unknown = mutation.args;
+	if (typeof args !== 'object' || args === null) fail('The server could not apply this change.');
+	const allowed: readonly string[] = FIELDS[mutation.name];
+	const unknown = Object.keys(args as object)
+		.filter((k) => !allowed.includes(k))
+		.sort();
+	if (unknown.length > 0) fail(`Unknown field: ${unknown[0]}`);
+
 	return mutator!(state, mutation.args);
 }
 

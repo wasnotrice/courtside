@@ -1,0 +1,513 @@
+{
+  "given": {
+    "players": [
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "name": "Ana",
+        "jersey": "4",
+        "active": true
+      },
+      {
+        "id": "22222222-2222-4222-8222-222222222222",
+        "name": "Ben",
+        "jersey": "12",
+        "active": true
+      }
+    ],
+    "drills": [
+      {
+        "id": "d1111111-1111-4111-8111-111111111111",
+        "name": "Free throws",
+        "kind": "makes",
+        "default_setup": 50,
+        "archived": false
+      },
+      {
+        "id": "d2222222-2222-4222-8222-222222222222",
+        "name": "Suicides",
+        "kind": "time",
+        "default_setup": 3,
+        "archived": false
+      }
+    ],
+    "runs": [
+      {
+        "id": "a1111111-1111-4111-8111-111111111111",
+        "date": "2026-11-06",
+        "drill_id": "d1111111-1111-4111-8111-111111111111",
+        "setup": 50
+      },
+      {
+        "id": "a2222222-2222-4222-8222-222222222222",
+        "date": "2026-11-06",
+        "drill_id": "d2222222-2222-4222-8222-222222222222",
+        "setup": 3
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "records a value",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 38
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": 38,
+              "setup": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "replaces a value",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 38,
+            "setup": null
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 41
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": 41,
+              "setup": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "makes over the run's shots are refused",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 51
+        }
+      },
+      "expect": {
+        "rejected": "51 makes is more than 50 shots."
+      }
+    },
+    {
+      "name": "makes up to a player's own setup are allowed",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": null,
+            "setup": 60
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 55
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": 55,
+              "setup": 60
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "fractional makes are refused",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 5.5
+        }
+      },
+      "expect": {
+        "rejected": "Makes must be a whole number."
+      }
+    },
+    {
+      "name": "a negative value is refused",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": -1
+        }
+      },
+      "expect": {
+        "rejected": "Results can't be negative."
+      }
+    },
+    {
+      "name": "a value that isn't a number is refused",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": "5"
+        }
+      },
+      "expect": {
+        "rejected": "Enter a number."
+      }
+    },
+    {
+      "name": "a time of zero is refused",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a2222222-2222-4222-8222-222222222222",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 0
+        }
+      },
+      "expect": {
+        "rejected": "Time must be above zero."
+      }
+    },
+    {
+      "name": "a fractional time is allowed",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a2222222-2222-4222-8222-222222222222",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 12.5
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a2222222-2222-4222-8222-222222222222",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": 12.5,
+              "setup": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a value in a deleted run is refused",
+      "with": {
+        "runs": [
+          {
+            "id": "a3333333-3333-4333-8333-333333333333",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a3333333-3333-4333-8333-333333333333",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 3
+        }
+      },
+      "expect": {
+        "rejected": "That drill was removed from the practice."
+      }
+    },
+    {
+      "name": "a value for an unknown player is refused",
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "99999999-9999-4999-8999-999999999999",
+          "value": 3
+        }
+      },
+      "expect": {
+        "rejected": "That player is no longer on the roster."
+      }
+    },
+    {
+      "name": "a value revives a cleared result",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": null,
+            "setup": null,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_value",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "value": 20
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": 20,
+              "setup": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sets a player's own setup",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 38,
+            "setup": null
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_setup",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "setup": 40
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": 38,
+              "setup": 40
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a player's setup can't drop below their makes",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 45,
+            "setup": null
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_setup",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "setup": 40
+        }
+      },
+      "expect": {
+        "rejected": "45 makes is more than 40 shots."
+      }
+    },
+    {
+      "name": "a zero setup is refused",
+      "mutation": {
+        "name": "result.set_setup",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "setup": 0
+        }
+      },
+      "expect": {
+        "rejected": "Setup must be greater than 0"
+      }
+    },
+    {
+      "name": "a null setup goes back to the run's",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 38,
+            "setup": 40
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_setup",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "setup": null
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": 38,
+              "setup": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a setup revives a cleared result",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": null,
+            "setup": null,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.set_setup",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111",
+          "setup": 40
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "11111111-1111-4111-8111-111111111111",
+              "value": null,
+              "setup": 40
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "clears a result",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 38,
+            "setup": 40
+          },
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "22222222-2222-4222-8222-222222222222",
+            "value": 30,
+            "setup": null
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.clear",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111"
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "22222222-2222-4222-8222-222222222222",
+              "value": 30,
+              "setup": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "clearing a missing result does nothing",
+      "with": {
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "22222222-2222-4222-8222-222222222222",
+            "value": 30,
+            "setup": null
+          }
+        ]
+      },
+      "mutation": {
+        "name": "result.clear",
+        "args": {
+          "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+          "player_id": "11111111-1111-4111-8111-111111111111"
+        }
+      },
+      "expect": {
+        "rows": {
+          "results": [
+            {
+              "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+              "player_id": "22222222-2222-4222-8222-222222222222",
+              "value": 30,
+              "setup": null
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

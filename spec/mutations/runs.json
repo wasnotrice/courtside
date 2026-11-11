@@ -1,0 +1,411 @@
+{
+  "given": {
+    "players": [
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "name": "Ana",
+        "jersey": "4",
+        "active": true
+      }
+    ],
+    "drills": [
+      {
+        "id": "d1111111-1111-4111-8111-111111111111",
+        "name": "Free throws",
+        "kind": "makes",
+        "default_setup": 50,
+        "archived": false
+      },
+      {
+        "id": "d2222222-2222-4222-8222-222222222222",
+        "name": "Suicides",
+        "kind": "time",
+        "default_setup": 3,
+        "archived": false
+      },
+      {
+        "id": "d3333333-3333-4333-8333-333333333333",
+        "name": "Push-ups",
+        "kind": "count",
+        "default_setup": null,
+        "archived": false
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "creates a makes run",
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-06",
+          "drill_id": "d1111111-1111-4111-8111-111111111111",
+          "setup": 50
+        }
+      },
+      "expect": {
+        "rows": {
+          "runs": [
+            {
+              "id": "a1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-06",
+              "drill_id": "d1111111-1111-4111-8111-111111111111",
+              "setup": 50
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "creates a count run with no setup",
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a3333333-3333-4333-8333-333333333333",
+          "date": "2026-11-06",
+          "drill_id": "d3333333-3333-4333-8333-333333333333",
+          "setup": null
+        }
+      },
+      "expect": {
+        "rows": {
+          "runs": [
+            {
+              "id": "a3333333-3333-4333-8333-333333333333",
+              "date": "2026-11-06",
+              "drill_id": "d3333333-3333-4333-8333-333333333333",
+              "setup": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a makes run needs a setup",
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-06",
+          "drill_id": "d1111111-1111-4111-8111-111111111111",
+          "setup": null
+        }
+      },
+      "expect": {
+        "rejected": "Setup shots are required"
+      }
+    },
+    {
+      "name": "a missing drill is refused",
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-06",
+          "drill_id": "d9999999-9999-4999-8999-999999999999",
+          "setup": 50
+        }
+      },
+      "expect": {
+        "rejected": "That drill no longer exists."
+      }
+    },
+    {
+      "name": "a date that isn't YYYY-MM-DD is refused",
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "date": "11/06/2026",
+          "drill_id": "d1111111-1111-4111-8111-111111111111",
+          "setup": 50
+        }
+      },
+      "expect": {
+        "rejected": "Date is invalid"
+      }
+    },
+    {
+      "name": "a negative setup is refused",
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-06",
+          "drill_id": "d1111111-1111-4111-8111-111111111111",
+          "setup": -5
+        }
+      },
+      "expect": {
+        "rejected": "Setup must be greater than 0"
+      }
+    },
+    {
+      "name": "an existing id is refused",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-06",
+          "drill_id": "d1111111-1111-4111-8111-111111111111",
+          "setup": 50
+        }
+      },
+      "expect": {
+        "rejected": "Id already exists"
+      }
+    },
+    {
+      "name": "the id of a deleted run is refused",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.create",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "date": "2026-11-06",
+          "drill_id": "d1111111-1111-4111-8111-111111111111",
+          "setup": 50
+        }
+      },
+      "expect": {
+        "rejected": "Id already exists"
+      },
+      "known_difference": "The client never sees tombstones, so it accepts the id. Only possible if a UUID is reused."
+    },
+    {
+      "name": "changes a run's setup",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.set_setup",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "setup": 30
+        }
+      },
+      "expect": {
+        "rows": {
+          "runs": [
+            {
+              "id": "a1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-06",
+              "drill_id": "d1111111-1111-4111-8111-111111111111",
+              "setup": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a makes run's setup can't be removed",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.set_setup",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "setup": null
+        }
+      },
+      "expect": {
+        "rejected": "Setup shots are required"
+      }
+    },
+    {
+      "name": "setting the setup of a deleted run is refused",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50,
+            "deleted": true
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.set_setup",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "setup": 30
+        }
+      },
+      "expect": {
+        "rejected": "That drill was removed from the practice."
+      }
+    },
+    {
+      "name": "the setup can't drop below a player's makes",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50
+          }
+        ],
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 40,
+            "setup": null
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.set_setup",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "setup": 30
+        }
+      },
+      "expect": {
+        "rejected": "Ana has 40 makes, more than 30 shots."
+      }
+    },
+    {
+      "name": "a player with their own setup doesn't block the change",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50
+          }
+        ],
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 40,
+            "setup": 45
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.set_setup",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111",
+          "setup": 30
+        }
+      },
+      "expect": {
+        "rows": {
+          "runs": [
+            {
+              "id": "a1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-06",
+              "drill_id": "d1111111-1111-4111-8111-111111111111",
+              "setup": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "deleting a run removes it and its results",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50
+          }
+        ],
+        "results": [
+          {
+            "drill_run_id": "a1111111-1111-4111-8111-111111111111",
+            "player_id": "11111111-1111-4111-8111-111111111111",
+            "value": 40,
+            "setup": null
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.delete",
+        "args": {
+          "id": "a1111111-1111-4111-8111-111111111111"
+        }
+      },
+      "expect": {
+        "rows": {
+          "runs": [],
+          "results": []
+        }
+      }
+    },
+    {
+      "name": "deleting a missing run does nothing",
+      "with": {
+        "runs": [
+          {
+            "id": "a1111111-1111-4111-8111-111111111111",
+            "date": "2026-11-06",
+            "drill_id": "d1111111-1111-4111-8111-111111111111",
+            "setup": 50
+          }
+        ]
+      },
+      "mutation": {
+        "name": "run.delete",
+        "args": {
+          "id": "a3333333-3333-4333-8333-333333333333"
+        }
+      },
+      "expect": {
+        "rows": {
+          "runs": [
+            {
+              "id": "a1111111-1111-4111-8111-111111111111",
+              "date": "2026-11-06",
+              "drill_id": "d1111111-1111-4111-8111-111111111111",
+              "setup": 50
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
