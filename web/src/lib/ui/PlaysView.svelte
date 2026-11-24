@@ -53,7 +53,7 @@ edit it, delete it or add one after it. -->
 					<button class="prow-p" class:them={p.side === 'them'} onclick={() => (sheet = { play: p, after: null })}>
 						<span class="clk">{p.clock !== null ? fmtClock(p.clock) : ''}</span>
 						<span class="what">
-							{describePlay(p, nameOf)}
+							{describePlay(p, nameOf, game.opponent)}
 							{#if hinted.has(p.id)}<small class="hintline">{hinted.get(p.id)}</small>{/if}
 						</span>
 						<span class="film">{p.video_at !== null ? `▶ ${fmtClock(p.video_at)}` : ''}</span>
@@ -111,7 +111,7 @@ edit it, delete it or add one after it. -->
 		text-align: left;
 	}
 	.prow-p.them .what {
-		color: var(--muted);
+		color: var(--opp);
 	}
 	.clk,
 	.film {

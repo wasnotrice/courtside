@@ -1,5 +1,5 @@
-<!-- Recording a game as it happens: a player (or Team), then a stat; the other team's
-plays below; a skippable follow-up question after some plays; the last few plays. -->
+<!-- Recording a game as it happens: a player (or Team, or Opp for the other team), then a
+stat; a follow-up question after some plays, which None dismisses; the last few plays. -->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { FOUL_TYPES, type FoulType, type Stat } from '$lib/sync/basketball';
@@ -26,11 +26,17 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		pairedPlay,
 		reboundPlay,
 		shortNames,
+		OTHER_KEYS,
+		OTHER_LABEL,
+		reboundStat,
+		SHOT_KEYS,
 		STAT_LABEL,
-		STAT_PAD,
+		tripFor,
 		type FollowUp,
+		type OtherKey,
 		type Rebounder
 	} from './live';
+	import type { RosterRow } from './domain';
 	import RejectionNote from './RejectionNote.svelte';
 	import Sheet from './Sheet.svelte';
 
@@ -53,8 +59,18 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	const nameOf = (id: string) => names.get(id) ?? view.players.get(id)?.name ?? 'Player';
 
 	let period = $state(1);
-	/** A player's id, 'team', or nothing yet. Stays selected after a stat, for and-ones. */
+	/**
+	 * A player's id, 'team', 'opp' for the other team, or nothing yet. Stays selected after
+	 * a stat, for and-ones and runs of plays.
+	 */
 	let selected = $state<string | null>(null);
+	const sideOf = (sel: string): Play['side'] => (sel === 'opp' ? 'them' : 'us');
+	const playerOf = (sel: string) => (sel === 'team' || sel === 'opp' ? null : sel);
+
+	/** The free-throw trip being shot, with each shot's result so far. */
+	let trip = $state<{ side: Play['side']; player: string | null; shots: number; oneAndOne: boolean; made: boolean[] } | null>(
+		null
+	);
 	/**
 	 * The open question and the play it's about. For a rebound, `blocked` means the block
 	 * is recorded (or being asked about: `askBlocker`). For a block, `shooter` is our
@@ -103,7 +119,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 			recorded_at: now
 		};
 		const { foul_type: _f, assist_player_id: _a, drawn_by_player_id: _d, clock: _c, video_at: _v, ...args } = play;
-		return (await app.mutateUndoable(scope, describePlay(play, nameOf), { name: 'play.put', args })) ? play : null;
+		return (await app.mutateUndoable(scope, describePlay(play, nameOf, game.opponent), { name: 'play.put', args })) ? play : null;
 	}
 
 	/** Records a play, then asks its follow-up question. */
@@ -113,15 +129,52 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		followUp = play && kind ? { kind, play } : null;
 	}
 
-	const ours = (stat: Stat) => selected && recordAndAsk('us', stat, selected === 'team' ? null : selected);
-	const theirs = (stat: Stat) => recordAndAsk('them', stat, null);
+	function choose(sel: string) {
+		selected = sel;
+		trip = null;
+	}
+
+	function tapStat(stat: Stat) {
+		if (!selected) return;
+		trip = null;
+		recordAndAsk(sideOf(selected), stat, playerOf(selected));
+	}
+
+	const OTHER_STAT: Record<Exclude<OtherKey, 'reb' | 'ft'>, Stat> = { stl: 'stl', blk: 'blk', tov: 'tov', foul: 'foul' };
+
+	function tapOther(key: OtherKey) {
+		if (!selected) return;
+		const side = sideOf(selected);
+		const player = playerOf(selected);
+		if (key === 'ft') {
+			followUp = null;
+			trip = { side, player, ...tripFor(plays, rules, side, period), made: [] };
+		} else if (key === 'reb') {
+			trip = null;
+			record(side, reboundStat(plays, side), player);
+		} else {
+			tapStat(OTHER_STAT[key]);
+		}
+	}
+
+	/** One free throw of the trip. A miss that ends the trip asks for the rebound. */
+	async function shoot(made: boolean) {
+		if (!trip) return;
+		// The trip moves on before the play is saved, so quick taps each count once.
+		const t = trip;
+		const results = [...t.made, made];
+		const ended = results.length >= t.shots || (!made && t.oneAndOne && results.length === 1);
+		trip = ended ? null : { ...t, made: results };
+		const play = await record(t.side, made ? 'ft_made' : 'ft_missed', t.player);
+		if (play && ended && !made) followUp = { kind: 'rebound', play };
+	}
 
 	/** Answers the follow-up by changing the play it asked about. */
 	async function amend(change: { assist_player_id?: string; foul_type?: FoulType; drawn_by_player_id?: string }) {
 		if (!followUp) return;
 		const play = followUp.play;
 		followUp = null;
-		await app.mutateUndoable(scope, describePlay({ ...play, ...change }, nameOf), { name: 'play.put', args: { id: play.id, ...change } });
+		await app.mutateUndoable(scope, describePlay({ ...play, ...change }, nameOf, game.opponent), { name: 'play.put', args: { id: play.id, ...change } });
 	}
 
 	async function rebound(by: Rebounder) {
@@ -158,7 +211,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 
 	async function remove(play: Play) {
 		if (followUp?.play.id === play.id) followUp = null;
-		await app.mutateUndoable(scope, `delete ${describePlay(play, nameOf)}`, { name: 'play.delete', args: { id: play.id } });
+		await app.mutateUndoable(scope, `delete ${describePlay(play, nameOf, game.opponent)}`, { name: 'play.delete', args: { id: play.id } });
 	}
 
 	// --- the rest of the screen -------------------------------------------------------------
@@ -214,6 +267,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	const lastUndo = $derived(app.lastUndo(scope));
 	async function undo() {
 		followUp = null;
+		trip = null;
 		await app.undo(scope);
 	}
 	const shooterOf = $derived(followUp?.play.player_id ?? null);
@@ -230,10 +284,15 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		</div>
 		<span class="fouls">
 			Fouls: us {us.fouls}{#if us.bonus !== 'none'}<span class="bonus">{BONUS_LABEL[us.bonus]}</span>{/if}
-			· them {them.fouls}{#if them.bonus !== 'none'}<span class="bonus">{BONUS_LABEL[them.bonus]}</span>{/if}
+			· <span class="opp">opp</span> {them.fouls}{#if them.bonus !== 'none'}<span class="bonus">{BONUS_LABEL[them.bonus]}</span>{/if}
 		</span>
 	</div>
 </GameHeader>
+
+<!-- A player in a follow-up question, shown as on the player buttons: number first. -->
+{#snippet chip(r: RosterRow, onclick: () => void)}
+	<button class="chip" {onclick}><span class="jn">{r.jersey || '–'}</span><span class="nm">{nameOf(r.player.id)}</span></button>
+{/snippet}
 
 <main class="live">
 	{#each rejections as r (r.mutation_id)}<RejectionNote rejection={r} standalone />{/each}
@@ -241,7 +300,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	<div class="players" role="group" aria-label="Player">
 		{#each rows as r (r.player.id)}
 			{@const t = foulTrouble(plays, rules, r.player.id)}
-			<button class="pl" class:on={selected === r.player.id} aria-pressed={selected === r.player.id} onclick={() => (selected = r.player.id)}>
+			<button class="pl" class:on={selected === r.player.id} aria-pressed={selected === r.player.id} onclick={() => choose(r.player.id)}>
 				<span class="jn">{r.jersey || '–'}</span>
 				<span class="nm">{names.get(r.player.id)}</span>
 				{#if t.ejected}<span class="pf out">EJ</span>
@@ -249,91 +308,116 @@ plays below; a skippable follow-up question after some plays; the last few plays
 				{:else if t.fouls}<span class="pf" class:warn={t.fouls >= rules.foul_out_at - 1}>{t.fouls}F</span>{/if}
 			</button>
 		{/each}
-		<button class="pl team" class:on={selected === 'team'} aria-pressed={selected === 'team'} onclick={() => (selected = 'team')}>
+		<button class="pl team" class:on={selected === 'team'} aria-pressed={selected === 'team'} onclick={() => choose('team')}>
 			<span class="nm">Team</span>
+		</button>
+		<button class="pl oppt" class:on={selected === 'opp'} aria-pressed={selected === 'opp'} onclick={() => choose('opp')}>
+			<span class="nm">Opp</span>
 		</button>
 		{#if others.length}
 			<button class="pl more" onclick={() => (sheet = 'player')}><span class="nm">+ Player</span></button>
 		{/if}
 	</div>
 
-	<div class="pad" role="group" aria-label="Our stats">
-		{#each STAT_PAD as stat (stat)}
-			<button class="k st" class:make={stat.endsWith('_made')} disabled={!selected} onclick={() => ours(stat)}>
-				{STAT_LABEL[stat]}
-			</button>
-		{/each}
+	<div class="pad" class:opp={selected === 'opp'} role="group" aria-label="Stats">
+		<div class="shots">
+			{#each SHOT_KEYS as pair (pair[0])}
+				<div class="pair">
+					{#each pair as stat (stat)}
+						<button class="k st" class:make={stat.endsWith('_made')} disabled={!selected} onclick={() => tapStat(stat)}>
+							{STAT_LABEL[stat]}
+						</button>
+					{/each}
+				</div>
+			{/each}
+		</div>
+		<div class="others">
+			{#each OTHER_KEYS as key (key)}
+				<button class="k st sm" class:ft={key === 'ft'} disabled={!selected} onclick={() => tapOther(key)}>{OTHER_LABEL[key]}</button>
+			{/each}
+		</div>
 	</div>
-	{#if !selected}<p class="hint">Tap a player, or Team, then the stat.</p>{/if}
+	{#if !selected}<p class="hint">Tap a player, Team or Opp, then the stat.</p>{/if}
 
-	<h3>Them</h3>
-	<div class="pad" role="group" aria-label="Their stats">
-		{#each STAT_PAD as stat (stat)}
-			<button class="k st" class:make={stat.endsWith('_made')} onclick={() => theirs(stat)}>{STAT_LABEL[stat]}</button>
-		{/each}
-	</div>
+	{#if trip}
+		{@const t = trip}
+		<div class="follow" class:opp={t.side === 'them'} role="group" aria-label="Free throws">
+			<b>
+				{t.side === 'them' ? 'Opp' : t.player ? nameOf(t.player) : 'Team'} free throws{t.oneAndOne ? ', 1-and-1' : ''}
+				<span class="shots-dots" aria-hidden="true">
+					{#each Array.from({ length: t.shots }, (_, i) => t.made[i]) as m, i (i)}
+						<span class:made={m === true} class:missed={m === false}>{m === undefined ? '○' : m ? '✓' : '✗'}</span>
+					{/each}
+				</span>
+			</b>
+			<button class="ftk make" onclick={() => shoot(true)}>✓</button>
+			<button class="ftk" onclick={() => shoot(false)}>✗</button>
+			<button class="skip" onclick={() => (trip = { ...t, shots: t.shots + 1 })}>+ Shot</button>
+			<button class="skip" onclick={() => (trip = null)}>Done</button>
+		</div>
+	{/if}
 
 	{#if followUp}
 		<div class="follow" role="group" aria-label="Follow-up">
 			{#if followUp.kind === 'assist'}
 				<b>Assist?</b>
 				{#each rows.filter((r) => r.player.id !== shooterOf) as r (r.player.id)}
-					<button onclick={() => amend({ assist_player_id: r.player.id })}>{nameOf(r.player.id)}</button>
+					{@render chip(r, () => amend({ assist_player_id: r.player.id }))}
 				{/each}
 			{:else if followUp.kind === 'rebound' && followUp.askBlocker}
 				<b>Blocked by?</b>
 				{#each rows as r (r.player.id)}
-					<button onclick={() => block(r.player.id)}>{nameOf(r.player.id)}</button>
+					{@render chip(r, () => block(r.player.id))}
 				{/each}
 			{:else if followUp.kind === 'rebound'}
 				<b>Rebound?</b>
 				{#each rows as r (r.player.id)}
-					<button onclick={() => rebound({ player: r.player.id })}>{nameOf(r.player.id)}</button>
+					{@render chip(r, () => rebound({ player: r.player.id }))}
 				{/each}
-				<button onclick={() => rebound('team')}>Team</button>
-				<button onclick={() => rebound('them')}>Them</button>
+				<button class="chip" onclick={() => rebound('team')}>Team</button>
+				<button class="chip oppc" onclick={() => rebound('them')}>Opp</button>
 				{#if blockable(followUp.play) && !followUp.blocked}
 					{@const f = followUp}
-					<button class="alt" onclick={() => (f.play.side === 'us' ? block() : (followUp = { ...f, askBlocker: true }))}>
+					<button class="chip alt" onclick={() => (f.play.side === 'us' ? block() : (followUp = { ...f, askBlocker: true }))}>
 						Blocked
 					</button>
 				{/if}
 			{:else if followUp.kind === 'foul_type'}
 				<b>Foul type?</b>
 				{#each FOUL_TYPES.filter((t) => t !== 'personal') as t (t)}
-					<button onclick={() => amend({ foul_type: t })}>{FOUL_TYPE_LABEL[t]}</button>
+					<button class="chip" onclick={() => amend({ foul_type: t })}>{FOUL_TYPE_LABEL[t]}</button>
 				{/each}
 			{:else if followUp.kind === 'drawn'}
 				<b>Fouled?</b>
 				{#each rows as r (r.player.id)}
-					<button onclick={() => amend({ drawn_by_player_id: r.player.id })}>{nameOf(r.player.id)}</button>
+					{@render chip(r, () => amend({ drawn_by_player_id: r.player.id }))}
 				{/each}
 			{:else if followUp.kind === 'steal'}
 				<b>Stolen?</b>
-				<button onclick={() => pair()}>Steal by them</button>
+				<button class="chip oppc" onclick={() => pair()}>Steal by Opp</button>
 			{:else if followUp.kind === 'turnover_by'}
 				<b>Turnover by?</b>
 				{#each rows as r (r.player.id)}
-					<button onclick={() => pair(r.player.id)}>{nameOf(r.player.id)}</button>
+					{@render chip(r, () => pair(r.player.id))}
 				{/each}
-				<button onclick={() => pair(null)}>Team</button>
+				<button class="chip" onclick={() => pair(null)}>Team</button>
 			{:else if followUp.play.side === 'them' && followUp.shooter === undefined}
 				{@const f = followUp}
 				<b>Whose shot?</b>
 				{#each rows as r (r.player.id)}
-					<button onclick={() => (followUp = { ...f, shooter: r.player.id })}>{nameOf(r.player.id)}</button>
+					{@render chip(r, () => (followUp = { ...f, shooter: r.player.id }))}
 				{/each}
-				<button onclick={() => (followUp = { ...f, shooter: null })}>Team</button>
+				<button class="chip" onclick={() => (followUp = { ...f, shooter: null })}>Team</button>
 			{:else}
 				<b>
 					{followUp.play.side === 'us'
-						? 'Their shot?'
+						? 'Opp shot?'
 						: `${followUp.shooter ? nameOf(followUp.shooter) : 'Team'}'s shot?`}
 				</b>
-				<button onclick={() => blockedShot('fg2_missed')}>2 ✗</button>
-				<button onclick={() => blockedShot('fg3_missed')}>3 ✗</button>
+				<button class="chip" onclick={() => blockedShot('fg2_missed')}>2 ✗</button>
+				<button class="chip" onclick={() => blockedShot('fg3_missed')}>3 ✗</button>
 			{/if}
-			<button class="skip" onclick={() => (followUp = null)}>Skip</button>
+			<button class="skip" onclick={() => (followUp = null)}>None</button>
 		</div>
 	{/if}
 
@@ -346,8 +430,8 @@ plays below; a skippable follow-up question after some plays; the last few plays
 			{#each recent as p (p.id)}
 				<li>
 					<span class="per">{periodLabel(rules, p.period)}</span>
-					<span>{describePlay(p, nameOf)}</span>
-					<button class="del" aria-label="Delete play: {describePlay(p, nameOf)}" onclick={() => remove(p)}>✕</button>
+					<span class:opp={p.side === 'them'}>{describePlay(p, nameOf, game.opponent)}</span>
+					<button class="del" aria-label="Delete play: {describePlay(p, nameOf, game.opponent)}" onclick={() => remove(p)}>✕</button>
 				</li>
 			{/each}
 		</ul>
@@ -392,7 +476,7 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		opacity: 0.4;
 	}
 	.fouls {
-		font-size: 14px;
+		font-size: 13px;
 		color: var(--muted);
 		font-weight: 600;
 		text-align: right;
@@ -411,9 +495,6 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	main.live {
 		gap: 10px;
 		padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-	}
-	main.live h3 {
-		margin: 4px 0 0;
 	}
 	.players {
 		display: grid;
@@ -455,8 +536,17 @@ plays below; a skippable follow-up question after some plays; the last few plays
 		outline: 2px solid var(--accent);
 	}
 	.pl.team .nm,
+	.pl.oppt .nm,
 	.pl.more .nm {
 		font-size: 15px;
+	}
+	.pl.oppt {
+		color: var(--opp);
+		border-color: var(--opp);
+	}
+	.pl.oppt.on {
+		background: var(--opp-soft);
+		outline-color: var(--opp);
 	}
 	.pl.more {
 		border-style: dashed;
@@ -476,12 +566,41 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	}
 	.pad {
 		display: grid;
+		gap: 8px;
+		border-radius: 12px;
+	}
+	/* With Opp picked, the pad takes the opponent's color, so it's clear whose stat it is. */
+	.pad.opp {
+		outline: 2px solid var(--opp);
+		outline-offset: 4px;
+	}
+	.shots {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+	}
+	.pair {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 4px;
+	}
+	.others {
+		display: grid;
 		grid-template-columns: repeat(6, 1fr);
 		gap: 6px;
 	}
 	.st {
-		height: 50px;
-		font-size: 19px;
+		height: 58px;
+		font-size: 21px;
+	}
+	.st.sm {
+		height: 44px;
+		font-size: 16px;
+	}
+	.st.ft {
+		background: none;
+		border: 1px solid var(--line);
+		color: var(--muted);
 	}
 	.st.make {
 		background: var(--good-soft);
@@ -500,14 +619,59 @@ plays below; a skippable follow-up question after some plays; the last few plays
 	.follow b {
 		width: 100%;
 	}
-	.follow button {
+	.follow.opp {
+		background: var(--opp-soft);
+		border-color: var(--opp);
+	}
+	.chip {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 5px;
 		border: 1px solid var(--line);
 		background: var(--surface);
 		border-radius: 999px;
 		padding: 8px 12px;
 		font-weight: 600;
 	}
-	.follow .alt {
+	.chip .jn {
+		width: auto;
+		height: auto;
+		background: none;
+		font-size: 20px;
+		line-height: 1;
+	}
+	.chip .nm {
+		font-size: 13px;
+	}
+	.chip.oppc {
+		color: var(--opp);
+		border-color: var(--opp);
+	}
+	.ftk {
+		min-width: 72px;
+		height: 50px;
+		font-size: 22px;
+		font-weight: 700;
+		border: 1px solid var(--line);
+		background: var(--surface);
+		border-radius: 10px;
+	}
+	.ftk.make {
+		background: var(--good-soft);
+		color: var(--good);
+	}
+	.shots-dots {
+		margin-left: 8px;
+		letter-spacing: 0.2em;
+		color: var(--muted);
+	}
+	.shots-dots .made {
+		color: var(--good);
+	}
+	.shots-dots .missed {
+		color: var(--bad);
+	}
+	.follow .chip.alt {
 		border-style: dashed;
 	}
 	.follow .skip {

@@ -49,10 +49,13 @@ async function openGame(page: Page, name: string) {
 	await expect(page.locator('header.game')).toBeVisible();
 }
 
-/** Records a made free throw for the nth player on the live screen. */
+/** Records one made free throw for the nth player on the live screen, then ends the trip. */
 async function freeThrow(page: Page, nth = 0) {
 	await page.getByRole('group', { name: 'Player' }).locator('.pl').nth(nth).click();
-	await page.getByRole('group', { name: 'Our stats' }).getByRole('button', { name: 'FT ✓', exact: true }).click();
+	await page.getByRole('group', { name: 'Stats' }).getByRole('button', { name: 'FT', exact: true }).click();
+	const trip = page.getByRole('group', { name: 'Free throws' });
+	await trip.getByRole('button', { name: '✓', exact: true }).click();
+	await trip.getByRole('button', { name: 'Done' }).click();
 }
 
 const score = (page: Page) => page.locator('header .score');

@@ -114,7 +114,7 @@ play has, with the stat pad laid out as on the live screen. -->
 	<h2>{play ? 'Edit play' : 'Add a play'}</h2>
 	<div class="seg two">
 		<button class:on={draft.side === 'us'} onclick={() => (draft.side = 'us')}>Us</button>
-		<button class:on={draft.side === 'them'} onclick={() => (draft.side = 'them')}>Them</button>
+		<button class:on={draft.side === 'them'} onclick={() => (draft.side = 'them')}>Opp</button>
 	</div>
 	{#if draft.side === 'us'}
 		<label class="field">

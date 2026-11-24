@@ -2,7 +2,7 @@
 :root{
   --bg:#eef1f4; --surface:#ffffff; --ink:#15202b; --muted:#5b6876; --line:#d6dde4;
   --accent:#d9480f; --accent-ink:#ffffff; --accent-soft:#fde8dc;
-  --good:#1e7f4a; --good-soft:#dcf2e5; --warn:#9a5700; --warn-soft:#fbecd2; --bad:#c92a2a;
+  --good:#1e7f4a; --good-soft:#dcf2e5; --warn:#9a5700; --warn-soft:#fbecd2; --bad:#c92a2a; --opp:#6d3fd1; --opp-soft:#ece4fb;
   --key:#e2e7ec; --key-ink:#15202b;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -10,13 +10,13 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0e141a; --surface:#172029; --ink:#e6ecf1; --muted:#93a1ae; --line:#283541;
   --accent:#ff7b3a; --accent-ink:#1a0d05; --accent-soft:#3a2216;
-  --good:#52c486; --good-soft:#163526; --warn:#e8a64a; --warn-soft:#3a2a12; --bad:#ff6b6b;
+  --good:#52c486; --good-soft:#163526; --warn:#e8a64a; --warn-soft:#3a2a12; --bad:#ff6b6b; --opp:#b49aff; --opp-soft:#2a2242;
   --key:#223040; --key-ink:#e6ecf1; color-scheme:dark;
 }}
 :root[data-theme="dark"]{
   --bg:#0e141a; --surface:#172029; --ink:#e6ecf1; --muted:#93a1ae; --line:#283541;
   --accent:#ff7b3a; --accent-ink:#1a0d05; --accent-soft:#3a2216;
-  --good:#52c486; --good-soft:#163526; --warn:#e8a64a; --warn-soft:#3a2a12; --bad:#ff6b6b;
+  --good:#52c486; --good-soft:#163526; --warn:#e8a64a; --warn-soft:#3a2a12; --bad:#ff6b6b; --opp:#b49aff; --opp-soft:#2a2242;
   --key:#223040; --key-ink:#e6ecf1; color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -41,6 +41,7 @@ h3{font-family:var(--display);font-weight:600;font-size:15px;text-transform:uppe
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--good-soft);color:var(--good);white-space:nowrap}
 .pill i{width:8px;height:8px;border-radius:50%;background:currentColor}
 .pill.busy{background:var(--key);color:var(--muted)}
+.opp{color:var(--opp)}
 .pill.warn{background:var(--warn-soft);color:var(--warn)}
 
 main{display:grid;gap:12px;padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}

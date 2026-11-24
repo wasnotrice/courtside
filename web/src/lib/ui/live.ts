@@ -1,7 +1,8 @@
 // The live screen's logic: what each button records, which follow-up question a play
 // asks, and how plays read in the recent list. Pure functions; LiveView does the taps.
 
-import type { Stat } from '$lib/sync/basketball';
+import type { Rules, Stat } from '$lib/sync/basketball';
+import { bonusFor } from './basketball';
 import type { Play } from '$lib/sync/types';
 import type { RosterRow } from './domain';
 
@@ -29,6 +30,48 @@ export const STAT_PAD: Stat[] = [
 	...['ft_made', 'ft_missed', 'fg2_made', 'fg2_missed', 'fg3_made', 'fg3_missed'],
 	...['oreb', 'dreb', 'stl', 'blk', 'tov', 'foul']
 ] as Stat[];
+
+/**
+ * The live screen's pad: shots in make/miss pairs, then everything else. One rebound
+ * key (offensive or defensive comes from the last miss) and a free-throw key that opens
+ * the trip, since free throws come at a slower pace.
+ */
+export const SHOT_KEYS = [
+	['fg2_made', 'fg2_missed'],
+	['fg3_made', 'fg3_missed']
+] as const satisfies readonly (readonly Stat[])[];
+export type OtherKey = 'reb' | 'stl' | 'blk' | 'tov' | 'foul' | 'ft';
+export const OTHER_KEYS: OtherKey[] = ['reb', 'stl', 'blk', 'tov', 'foul', 'ft'];
+export const OTHER_LABEL: Record<OtherKey, string> = { reb: 'REB', stl: 'STL', blk: 'BLK', tov: 'TO', foul: 'F', ft: 'FT' };
+
+/**
+ * A rebound for `side` with no miss to hang it on: offensive if the last miss was
+ * `side`'s own, defensive otherwise (and when nothing has been missed yet).
+ */
+export function reboundStat(plays: readonly Pick<Play, 'side' | 'stat'>[], side: Play['side']): 'oreb' | 'dreb' {
+	const miss = plays.findLast((p) => MISSES.includes(p.stat));
+	return miss?.side === side ? 'oreb' : 'dreb';
+}
+
+/** A free-throw trip: how many shots, and whether a miss on the first ends it. */
+export interface Trip {
+	shots: number;
+	oneAndOne: boolean;
+}
+
+/**
+ * The trip `side` is most likely shooting, from the play just before it: one shot after
+ * its own make (an and-one), the bonus after a common foul by the other team, and two
+ * otherwise. The scorer can add a shot or stop early.
+ */
+export function tripFor(plays: readonly Play[], rules: Rules, side: Play['side'], period: number): Trip {
+	const last = plays.at(-1);
+	if (last?.side === side && (last.stat === 'fg2_made' || last.stat === 'fg3_made')) return { shots: 1, oneAndOne: false };
+	if (last && last.side !== side && last.stat === 'foul' && (last.foul_type ?? 'personal') === 'personal') {
+		if (bonusFor(plays.slice(0, -1), rules, side, period) === 'one_and_one') return { shots: 2, oneAndOne: true };
+	}
+	return { shots: 2, oneAndOne: false };
+}
 
 const MISSES: Stat[] = ['ft_missed', 'fg2_missed', 'fg3_missed'];
 
@@ -118,9 +161,12 @@ export function shortNames(rows: readonly Pick<RosterRow, 'player'>[]): Map<stri
 
 const FOUL_LABEL = { personal: '', offensive: ' (offensive)', technical: ' (technical)', flagrant: ' (flagrant)' } as const;
 
-/** "Ava 2 ✓ (ast Riley)", "Them F (on Sam)", "Team DREB". */
-export function describePlay(play: Play, nameOf: (id: string) => string): string {
-	const who = play.side === 'them' ? 'Them' : play.player_id ? nameOf(play.player_id) : 'Team';
+/**
+ * "Ava 2 ✓ (ast Riley)", "Lincoln F (on Sam)", "Team DREB". The other team's plays use
+ * its name; the buttons say Opp.
+ */
+export function describePlay(play: Play, nameOf: (id: string) => string, opponent = 'Opp'): string {
+	const who = play.side === 'them' ? opponent.trim() || 'Opp' : play.player_id ? nameOf(play.player_id) : 'Team';
 	let what = STAT_LABEL[play.stat];
 	if (play.stat === 'foul' && play.foul_type) what += FOUL_LABEL[play.foul_type];
 	if (play.assist_player_id) what += ` (ast ${nameOf(play.assist_player_id)})`;

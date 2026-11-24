@@ -68,7 +68,7 @@ Revert for each edit. Shown inside the sheet that edits the row. Needs a connect
 	const FOUL: Record<string, string> = Object.fromEntries(FOUL_TYPES.map((t) => [t, t[0].toUpperCase() + t.slice(1)]));
 	const WORDS: Record<string, string> = {
 		us: 'Us',
-		them: 'Them',
+		them: 'Opp',
 		home: 'Home',
 		away: 'Away',
 		neutral: 'Neutral',

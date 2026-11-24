@@ -356,33 +356,49 @@ Rejection messages, matched on client and server:
 ```
 ┌────────────────────────────────────┐
 │ vs Lincoln   [Q2 ▾]   38 – 31      │
-│ Team fouls: us 3 · them 5 BONUS    │
+│ Fouls: us 3 · opp 5 BONUS          │
 ├────────────────────────────────────┤
-│ [4 Ava ·2F] [8 Riley] [11 Sam ·1F] │  ← player first (or Team)
-│ [12 Jo] [15 Mia ·4F] [22 Kai] [Team]│
+│ [4 Ava ·2F] [8 Riley] [11 Sam ·1F] │  ← player first (or Team, or Opp)
+│ [12 Jo] [15 Mia ·4F] [22 Kai]      │
+│ [Team] [Opp]                       │
 ├────────────────────────────────────┤
-│  FT ✓  FT ✗   2 ✓  2 ✗   3 ✓  3 ✗  │  ← then the stat
-│  OREB  DREB  STL  BLK  TO  F       │
+│  [ 2 ✓ | 2 ✗ ]    [ 3 ✓ | 3 ✗ ]    │  ← then the stat: shots, big
+│  REB  STL  BLK  TO  F  (FT)        │  ← the rest, smaller; FT opens the trip
 ├────────────────────────────────────┤
-│ Them                               │
-│  FT ✓  FT ✗   2 ✓  2 ✗   3 ✓  3 ✗  │  ← the same pad, team only
-│  OREB  DREB  STL  BLK  TO  F       │
+│ Assist? [8 Riley] [11 Sam]…  None  │  ← follow-up prompt
 ├────────────────────────────────────┤
-│ Assist? [players…]          [skip] │  ← follow-up prompt
-├────────────────────────────────────┤
-│ Q2  Riley 2 ✓ (ast Ava)          ✎ │
-│ Q2  Them DREB                    ✎ │  ← last 3–5 plays, editable
-│ Q2  Sam F                        ✎ │
 │                [Undo "Riley 2 ✓"]  │
+│ Q2  Riley 2 ✓ (ast Ava)          ✕ │
+│ Q2  Lincoln DREB                 ✕ │  ← last 5 plays
+│ Q2  Sam F                        ✕ │
 └────────────────────────────────────┘
 ```
 
+- **Few choices on screen, so the right button is quick to find.** This is the rule
+  for every live and entry screen: show what this moment needs and put the rest one
+  tap away. Slow, rare plays (free throws) get smaller keys than fast, common ones
+  (shots).
+- **The other team has its own color everywhere,** so it never reads like "Team": its
+  button, its plays, the score, the box score, review and history. Its buttons always
+  say "Opp", the same word every game, so the scorer's eye learns it by use. Its plays
+  use the opponent's name ("Lincoln DREB"), since they're read, not hunted for.
 - **Player first, then the stat:** two taps. The selected player stays selected, so
   an and-one is three taps. The research found stat-first more common but no evidence
   either order is faster. Player-first keeps the and-one case short.
-- **Follow-up prompts, all skippable**, dismissed by the next tap:
+- **One stat pad for both teams.** Opp is a button beside Team in the player row; with
+  it picked, the pad takes the opponent's color. An opponent play is two taps, or one
+  in a run, since the selection stays. Their plays are team only: no player.
+- **Shots in make/miss pairs,** one tap each, since they're the most common plays.
+- **One REB key.** Offensive or defensive comes from the last miss: offensive if it
+  was the rebounder's own team's. Most rebounds come from the follow-up after a miss
+  anyway.
+- **FT opens the trip:** ✓ and ✗ for each shot, one shot after an and-one, a
+  one-and-one after a common foul in the bonus, two otherwise. "+ Shot" adds one;
+  "Done" stops early. A miss that ends the trip asks for the rebound.
+- **Follow-up prompts**, each dismissed by None or the next tap. Players show as on
+  their buttons, number first:
   - after our make: "Assist?" with players;
-  - after any miss: "Rebound?" with players, Team or Them;
+  - after any miss: "Rebound?" with players, Team or Opp;
   - after our F: "Offensive / Technical / Flagrant";
   - after their F: "Fouled?" with players;
   - steals and turnovers, and blocks and missed shots, are pairs, and whichever half
@@ -392,13 +408,14 @@ Rejection messages, matched on client and server:
     if ours, then 2 or 3), placed just before the block, then the rebound.
 - **Foul counts on each player button**; the bonus shows beside team fouls, from the
   game's rules.
-- **The other team gets the same stat pad as ours,** every button in the same place,
-  so the scorer's hands learn one layout. Their plays are team only: no player.
 - **Every tap is saved on the phone before the screen shows it.** A test closes and
   reopens the app mid-game.
 - **Undo** reverses this phone's last change, synced or not, and says what it
   removed (see "Undo and history").
-- **No lineups or running clock.** The screen stays awake, as drill entry does.
+- **No lineups or running clock, for now.** The screen stays awake, as drill entry
+  does. Open question from first use: with 12 on the roster, 7 player buttons are for
+  players on the bench. Forced sub tracking is a top complaint about other apps, so any
+  answer must never make the scorer enter a sub before a stat.
 - **Unsynced warning at the end of a game.** Marking a game final, or leaving the live
   screen, with plays still unsynced shows how many and asks the scorer to get signal
   before closing the app or handing the phone back.

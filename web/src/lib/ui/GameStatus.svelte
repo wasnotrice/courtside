@@ -85,7 +85,7 @@ the flag when the plays don't add up to it. Marking a game final asks for the sc
 		<p class="hint">From the scorebook. Plays total {score.us}–{score.them}.</p>
 		<div class="pair">
 			<label class="field"><span>Us</span><input inputmode="numeric" bind:value={editing.us} /></label>
-			<label class="field"><span>Them</span><input inputmode="numeric" bind:value={editing.them} /></label>
+			<label class="field"><span class="opp">Opp</span><input inputmode="numeric" bind:value={editing.them} /></label>
 		</div>
 		{#if unsynced && (snap.offline || snap.phase === 'retrying')}
 			<p class="note">

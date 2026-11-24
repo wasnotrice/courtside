@@ -37,7 +37,7 @@ cell to see the plays behind it, edit or delete them, or add one. -->
 		}
 		if (hasNoPlayer) out.push({ row: 'no_player', label: 'No player', jersey: '', line: { ...noPlayer, ast: 0 } });
 		out.push({ row: 'team', label: 'Total', jersey: '', line: { ...box.team, fd: teamFd }, total: true });
-		out.push({ row: 'opponent', label: 'Them', jersey: '', line: box.opponent, total: true });
+		out.push({ row: 'opponent', label: 'Opp', jersey: '', line: box.opponent, total: true });
 		return out;
 	});
 
@@ -100,7 +100,7 @@ cell to see the plays behind it, edit or delete them, or add one. -->
 			<tbody>
 				{#each tableRows as r (typeof r.row === 'object' ? r.row.player : r.row)}
 					<tr class:total={r.total}>
-						<th class="who" scope="row">{#if r.jersey}<span class="jersey">{r.jersey}</span>{/if}{r.label}</th>
+						<th class="who" class:opp={r.row === 'opponent'} scope="row">{#if r.jersey}<span class="jersey">{r.jersey}</span>{/if}{r.label}</th>
 						{#each COLUMNS as col (col)}
 							<td class="n">
 								<button onclick={() => (open = { row: r.row, label: r.label, col })}>{cell(r.line, col)}</button>
@@ -127,7 +127,7 @@ cell to see the plays behind it, edit or delete them, or add one. -->
 				{#each behind as p (p.id)}
 					<li>
 						<button class="drow" onclick={() => (editing = { play: p, preset: {} })}>
-							<span>{describePlay(p, nameOf)}</span><span class="muted">{periodLabel(game.rules, p.period)}</span>
+							<span>{describePlay(p, nameOf, game.opponent)}</span><span class="muted">{periodLabel(game.rules, p.period)}</span>
 						</button>
 					</li>
 				{/each}

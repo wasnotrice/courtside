@@ -132,7 +132,7 @@ and practice compared with games for the shots a drill practices. -->
 					{#each COLS as col (col)}<td class="n">{cell(totals.team.line, totals.team.gp, col)}</td>{/each}
 				</tr>
 				<tr class="total">
-					<th class="who" scope="row">Them</th>
+					<th class="who opp" scope="row">Opp</th>
 					<td class="n">{totals.opponent.gp}</td>
 					{#each COLS as col (col)}<td class="n">{cell(totals.opponent.line, totals.opponent.gp, col)}</td>{/each}
 				</tr>

@@ -37,7 +37,7 @@ score from the plays, and the switch between Live, Plays and Box. -->
 	</div>
 	<div class="row">
 		<button class="title" onclick={() => (sheet = 'details')}><h1>{matchup(game)}</h1></button>
-		<span class="score" aria-label="Score">{score.us}–{score.them}</span>
+		<span class="score" aria-label="Score">{score.us}–<span class="opp">{score.them}</span></span>
 	</div>
 	<div class="seg modes" role="tablist" aria-label="Game screen">
 		{#each MODES as [mode, label] (mode)}
