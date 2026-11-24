@@ -3,9 +3,9 @@ defmodule Courtside.Sync do
   Hand-rolled push/pull sync, scoped by organization (see ADR 0001).
 
   Push: a client sends its pending mutations in order. Each push runs in one
-  transaction that first bumps its organization's counter in `org_versions`
-  (taking that row's lock, so pushes within an organization are serialized) and
-  stamps every row it writes with the new version. Mutations at or below the
+  writing transaction (`Courtside.Database.write_transaction/1`, so pushes within an
+  organization are serialized) that first bumps its organization's counter in
+  `org_versions` and stamps every row it writes with the new version. Mutations at or below the
   client's `last_mutation_id` were already processed and are skipped, which
   makes retries safe. A mutation that fails validation is rolled back to its
   savepoint, recorded as a rejection, and still counts as processed.
@@ -13,8 +13,8 @@ defmodule Courtside.Sync do
   Pull: a client sends the version it last saw (its cursor) and gets every row
   in its organization with a higher version, tombstones included, plus its
   `last_mutation_id` so it can drop pending mutations the server has handled.
-  Pull reads in one REPEATABLE READ snapshot, so the rows and the new cursor are
-  consistent. It also returns `data_id`; when that changes, the server's data
+  Pull reads in one snapshot (`Courtside.Database.read_transaction/1`), so the rows
+  and the new cursor are consistent. It also returns `data_id`; when that changes, the server's data
   was recreated or restored and the client must pull from scratch.
 
   A client id belongs to the organization it first pushed or pulled in. Using it
@@ -24,12 +24,16 @@ defmodule Courtside.Sync do
   import Ecto.Query
   require Logger
 
-  alias Courtside.Repo
+  alias Courtside.{Database, Repo}
 
   alias Courtside.Schema.{
+    ChangeLogEntry,
+    Client,
     Drill,
     DrillRun,
     Game,
+    MutationRejection,
+    OrgVersion,
     Play,
     Player,
     Program,
@@ -93,7 +97,7 @@ defmodule Courtside.Sync do
     with {:ok, org} <- cast_org(organization_id),
          :ok <- check_size(mutations),
          {:ok, result} <-
-           Repo.transaction(fn -> push_in_transaction(org, client_id, mutations) end) do
+           Database.write_transaction(fn -> push_in_transaction(org, client_id, mutations) end) do
       Phoenix.PubSub.broadcast(Courtside.PubSub, poke_topic(org), :poke)
       {:ok, result}
     end
@@ -115,7 +119,7 @@ defmodule Courtside.Sync do
           end
         end)
 
-      Repo.update_all(from(c in "clients", where: c.id == ^client_id),
+      Repo.update_all(from(c in Client, where: c.id == ^client_id),
         set: [last_mutation_id: last, updated_at: DateTime.utc_now(:second)]
       )
 
@@ -137,29 +141,23 @@ defmodule Courtside.Sync do
   def pull(organization_id, client_id, cursor)
       when is_binary(client_id) and is_integer(cursor) do
     with {:ok, org} <- cast_org(organization_id) do
-      Repo.transaction(fn -> pull_in_transaction(org, client_id, cursor) end)
+      Database.read_transaction(fn -> pull_in_transaction(org, client_id, cursor) end)
     end
   end
 
   defp pull_in_transaction(org, client_id, cursor) do
-    if snapshot_pulls?(),
-      do: Repo.query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-
     meta =
       Repo.one(
-        from v in "org_versions",
-          where: v.organization_id == type(^org, Ecto.UUID),
-          select: %{version: v.version, data_id: type(v.data_id, Ecto.UUID)}
+        from v in OrgVersion,
+          where: v.organization_id == ^org,
+          select: %{version: v.version, data_id: v.data_id}
       )
 
     client =
       Repo.one(
-        from c in "clients",
+        from c in Client,
           where: c.id == ^client_id,
-          select: %{
-            organization_id: type(c.organization_id, Ecto.UUID),
-            last: c.last_mutation_id
-          }
+          select: %{organization_id: c.organization_id, last: c.last_mutation_id}
       )
 
     cond do
@@ -171,7 +169,7 @@ defmodule Courtside.Sync do
 
       true ->
         rejections =
-          from(r in "mutation_rejections",
+          from(r in MutationRejection,
             where: r.client_id == ^client_id and r.version > ^cursor,
             order_by: r.mutation_id,
             select: %{mutation_id: r.mutation_id, name: r.name, args: r.args, reason: r.reason}
@@ -191,11 +189,6 @@ defmodule Courtside.Sync do
     end
   end
 
-  # The SQL sandbox wraps each test in a transaction, where SET TRANSACTION is
-  # no longer allowed, so test.exs turns this off. Tests that run outside the
-  # sandbox turn it back on.
-  defp snapshot_pulls?, do: Application.get_env(:courtside, :snapshot_pulls, true)
-
   defp cast_org(organization_id) do
     case Ecto.UUID.cast(organization_id) do
       {:ok, org} -> {:ok, org}
@@ -210,10 +203,7 @@ defmodule Courtside.Sync do
 
   defp bump_version(org) do
     case Repo.update_all(
-           from(v in "org_versions",
-             where: v.organization_id == type(^org, Ecto.UUID),
-             select: v.version
-           ),
+           from(v in OrgVersion, where: v.organization_id == ^org, select: v.version),
            inc: [version: 1]
          ) do
       {1, [version]} -> {:ok, version}
@@ -225,11 +215,11 @@ defmodule Courtside.Sync do
     now = DateTime.utc_now(:second)
 
     Repo.insert_all(
-      "clients",
+      Client,
       [
         %{
           id: client_id,
-          organization_id: Ecto.UUID.dump!(org),
+          organization_id: org,
           last_mutation_id: 0,
           inserted_at: now,
           updated_at: now
@@ -239,15 +229,12 @@ defmodule Courtside.Sync do
     )
 
     client =
-      Repo.one!(
-        from c in "clients",
-          where: c.id == ^client_id,
-          lock: "FOR UPDATE",
-          select: %{
-            organization_id: type(c.organization_id, Ecto.UUID),
-            last: c.last_mutation_id
-          }
+      from(c in Client,
+        where: c.id == ^client_id,
+        select: %{organization_id: c.organization_id, last: c.last_mutation_id}
       )
+      |> Database.lock()
+      |> Repo.one!()
 
     if client.organization_id == org,
       do: {:ok, client.last},
@@ -296,10 +283,10 @@ defmodule Courtside.Sync do
     [name, args, reason] = scrub([name, Map.get(m, "args", %{}), entry[:reason]])
     {row_table, row_key} = Map.get(entry, :row_table) |> row_of(entry, name, args)
 
-    Repo.insert_all("change_log", [
+    Repo.insert_all(ChangeLogEntry, [
       %{
-        id: Ecto.UUID.bingenerate(),
-        organization_id: Ecto.UUID.dump!(ctx.organization_id),
+        id: Ecto.UUID.generate(),
+        organization_id: ctx.organization_id,
         version: ctx.version,
         client_id: client_id,
         mutation_id: id,
@@ -354,13 +341,12 @@ defmodule Courtside.Sync do
   def history(organization_id, table, key, limit \\ 100) do
     with {:ok, org} <- cast_org(organization_id),
          true <-
-           Repo.exists?(
-             from v in "org_versions", where: v.organization_id == type(^org, Ecto.UUID)
-           ) || {:error, :unknown_organization} do
+           Repo.exists?(from v in OrgVersion, where: v.organization_id == ^org) ||
+             {:error, :unknown_organization} do
       {:ok,
-       from(c in "change_log",
+       from(c in ChangeLogEntry,
          where:
-           c.organization_id == type(^org, Ecto.UUID) and
+           c.organization_id == ^org and
              (c.row_table == ^table and c.row_key == ^key),
          order_by: [desc: c.version, desc: c.mutation_id],
          limit: ^limit,
@@ -380,16 +366,16 @@ defmodule Courtside.Sync do
   end
 
   # The rejection must always be stored, or the push fails and the client's
-  # queue is stuck behind this mutation forever. Postgres refuses NUL bytes in
-  # text and jsonb, so scrub them from anything the client sent.
+  # queue is stuck behind this mutation forever. Scrub NUL bytes from anything the
+  # client sent: Postgres refuses them in text and JSON, and C strings end at them.
   defp record_rejection(client_id, mutation_id, name, args, reason, version) do
     [name, args, reason] = scrub([name, args, reason])
 
     Repo.insert_all(
-      "mutation_rejections",
+      MutationRejection,
       [
         %{
-          id: Ecto.UUID.bingenerate(),
+          id: Ecto.UUID.generate(),
           client_id: client_id,
           mutation_id: mutation_id,
           name: name,
@@ -409,8 +395,8 @@ defmodule Courtside.Sync do
   defp scrub(other), do: other
 
   defp rejections_for(client_id, ids) do
-    from(r in "mutation_rejections",
-      where: r.client_id == ^client_id and r.mutation_id in type(^ids, {:array, :integer}),
+    from(r in MutationRejection,
+      where: r.client_id == ^client_id and r.mutation_id in ^ids,
       order_by: r.mutation_id,
       select: %{mutation_id: r.mutation_id, name: r.name, args: r.args, reason: r.reason}
     )

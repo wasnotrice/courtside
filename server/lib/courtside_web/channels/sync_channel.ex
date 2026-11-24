@@ -29,7 +29,7 @@ defmodule CourtsideWeb.SyncChannel do
   defp organization?(org) do
     case Ecto.UUID.cast(org) do
       {:ok, id} ->
-        Repo.exists?(from v in "org_versions", where: v.organization_id == type(^id, Ecto.UUID))
+        Repo.exists?(from v in Courtside.Schema.OrgVersion, where: v.organization_id == ^id)
 
       :error ->
         false

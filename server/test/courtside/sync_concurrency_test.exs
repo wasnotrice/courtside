@@ -13,12 +13,10 @@ defmodule Courtside.SyncConcurrencyTest do
 
   setup do
     Sandbox.mode(Repo, :auto)
-    Application.put_env(:courtside, :snapshot_pulls, true)
     clean!()
 
     on_exit(fn ->
       clean!()
-      Application.put_env(:courtside, :snapshot_pulls, false)
       Sandbox.mode(Repo, :manual)
     end)
   end
@@ -59,6 +57,9 @@ defmodule Courtside.SyncConcurrencyTest do
     if done?.(seen), do: {seen, next}, else: pull_until(org, done?, next, seen, attempts + 1)
   end
 
-  # Everything hangs off organizations, so this clears every table.
-  defp clean!, do: Repo.query!("TRUNCATE organizations CASCADE")
+  # Every table, children before parents so foreign keys hold.
+  @tables ~w(change_log mutation_rejections clients plays games results drill_runs drills
+             roster_entries players teams seasons programs org_versions organizations)
+
+  defp clean!, do: Enum.each(@tables, &Repo.query!("DELETE FROM #{&1}"))
 end

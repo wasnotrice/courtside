@@ -6,13 +6,9 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :courtside, Courtside.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  port: String.to_integer(System.get_env("PGPORT", "5433")),
-  database: "courtside_test#{System.get_env("MIX_TEST_PARTITION")}",
+  database: Path.expand("../courtside_test#{System.get_env("MIX_TEST_PARTITION")}.db", __DIR__),
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  pool_size: 5
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
@@ -30,6 +26,3 @@ config :phoenix, :plug_init_mode, :runtime
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
-
-# Pulls can't set their isolation level inside the SQL sandbox's transaction.
-config :courtside, snapshot_pulls: false

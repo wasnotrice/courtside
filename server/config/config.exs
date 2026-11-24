@@ -11,6 +11,10 @@ config :courtside,
   ecto_repos: [Courtside.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true]
 
+# SQLite stores UUIDs as 16-byte blobs, as Postgres does, so a malformed id is
+# refused when it's written instead of being stored as text.
+config :ecto_sqlite3, binary_id_type: :binary, uuid_type: :binary
+
 # Origins allowed to call the API from another address: the Tauri app on iOS
 # and Android (phase 3). The web app is served from the API's own address in
 # dev (through Vite's proxy), so it needs no entry here.

@@ -7,14 +7,14 @@ defmodule Courtside.Organizations do
   import Ecto.Query
 
   alias Courtside.Repo
-  alias Courtside.Schema.Organization
+  alias Courtside.Schema.{Organization, OrgVersion}
 
   @doc "Creates an organization and its version counter."
   def create!(name, id \\ Ecto.UUID.generate()) do
     {:ok, org} =
       Repo.transaction(fn ->
         org = Repo.insert!(%Organization{id: id, name: name})
-        Repo.insert_all("org_versions", [%{organization_id: Ecto.UUID.dump!(id)}])
+        Repo.insert!(%OrgVersion{organization_id: id, data_id: Ecto.UUID.generate()})
         org
       end)
 
@@ -28,8 +28,8 @@ defmodule Courtside.Organizations do
   """
   def new_data_id!(id) do
     {1, _} =
-      Repo.update_all(from(v in "org_versions", where: v.organization_id == type(^id, Ecto.UUID)),
-        set: [data_id: Ecto.UUID.bingenerate()]
+      Repo.update_all(from(v in OrgVersion, where: v.organization_id == ^id),
+        set: [data_id: Ecto.UUID.generate()]
       )
 
     :ok

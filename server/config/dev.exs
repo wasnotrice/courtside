@@ -2,14 +2,10 @@ import Config
 
 # Configure your database
 config :courtside, Courtside.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  port: String.to_integer(System.get_env("PGPORT", "5433")),
-  database: "courtside_dev",
+  database: Path.expand("../courtside_dev.db", __DIR__),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  pool_size: 5
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

@@ -26,18 +26,18 @@ defmodule Courtside.Repo.Migrations.CreateSyncTables do
     end
 
     # One row per organization holding its version counter. Every push bumps it
-    # while holding the row lock, so pushes within an organization are
-    # serialized and version order matches commit order (ADR 0001).
+    # in a writing transaction (Courtside.Database), so pushes within an
+    # organization are serialized and version order matches commit order (ADR 0001).
     #
     # data_id identifies this copy of the data. It changes whenever the
     # database is recreated or restored, and a phone that sees a new one pulls
-    # from scratch instead of trusting its cursor.
+    # from scratch instead of trusting its cursor. Courtside.Organizations sets it.
     create table(:org_versions, primary_key: false) do
       add :organization_id, references(:organizations, type: :binary_id, on_delete: :delete_all),
         primary_key: true
 
       add :version, :bigint, null: false, default: 0
-      add :data_id, :binary_id, null: false, default: fragment("gen_random_uuid()")
+      add :data_id, :binary_id, null: false
     end
 
     # Each device's sync identity and the last mutation the server processed for

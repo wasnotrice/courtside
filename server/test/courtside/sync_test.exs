@@ -85,15 +85,21 @@ defmodule Courtside.SyncTest do
          %{org: org} do
       ids = seed!(org, @client)
 
-      # Postgres refuses NUL bytes in text and Elixir doesn't check for them, so
-      # this raises inside the savepoint. The push must roll back to it and go on.
+      # The mutators check everything the constraints do, so a trigger stands in for
+      # an error only the database catches. It raises inside the savepoint; the push
+      # must roll back to it and go on. (The sandbox rolls the trigger back.)
+      Repo.query!("""
+      CREATE TRIGGER refuse_cam BEFORE INSERT ON players WHEN NEW.name = 'Cam'
+      BEGIN SELECT RAISE(ABORT, 'refused'); END
+      """)
+
       {result, _log} =
         with_log(fn ->
           push!(
             org.org,
             @client,
             [
-              {"player.put", player(org, "Cam\u0000")},
+              {"player.put", player(org, "Cam")},
               {"result.set_value", %{drill_run_id: ids.run, player_id: ids.player, value: 10}}
             ],
             4
