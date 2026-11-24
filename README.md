@@ -12,18 +12,17 @@ The project is also an experiment in offline-first design with hand-rolled
 sync. [docs/sync-protocol.md](docs/sync-protocol.md) explains how the sync
 works and why.
 
-- `server/`: Phoenix API (Elixir) with Postgres. It's the source of truth and
+- `server/`: Phoenix API (Elixir) with SQLite. It's the source of truth and
   runs the business rules.
 - `web/`: SvelteKit single-page app. It keeps all data on the device in
   IndexedDB.
 
 ## Run it
 
-You need Elixir 1.15 or later, Node 22 and Docker (for Postgres).
+You need Elixir 1.15 or later and Node 22. The database is a SQLite file,
+`server/courtside_dev.db`, so there's no database server to start.
 
 ```sh
-docker compose up -d                        # Postgres 17 on port 5433
-
 cd server
 mix setup                                   # deps, database, migration, dev seed
 mix phx.server                              # API on http://localhost:4000
@@ -77,10 +76,6 @@ it's on the home screen; the home screen app is also likelier to get persistent
 storage, so the queue isn't evicted when the phone is low on space. The home
 screen app may keep its own storage, separate from Safari's, so don't switch
 between them. The Sync tab shows whether storage is persistent.
-
-**Already have Postgres on another port?** The server reads `PGPORT`, for
-example `PGPORT=5432 mix phx.server`. The username and password are
-`postgres`/`postgres`.
 
 ## Test it
 

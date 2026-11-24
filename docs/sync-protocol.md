@@ -92,14 +92,13 @@ names and the messages can't drift apart without a test failing.
 
 A push carries at most 500 changes and 1 MB; the phone sends at most 200 at a
 time and goes again for the rest. The server handles the whole push in one
-database transaction:
+writing transaction, and writing transactions run one at a time (on SQLite, across
+the whole database; see [ADR 0002](adr/0002-sqlite-and-litestream-on-one-fly-machine.md)):
 
 1. **Bump the organization's version.** The first step is
    `UPDATE org_versions SET version = version + 1` for the push's organization.
-   That locks the organization's row until the transaction ends, so pushes in one
-   organization run one at a time and versions are handed out in the order the
-   pushes commit. Pushes in different organizations don't wait for each other.
-   Every row the push writes is stamped with that version.
+   Because pushes run one at a time, versions are handed out in the order the
+   pushes commit. Every row the push writes is stamped with that version.
 2. **Skip what it has already seen.** The server stores each phone's last
    mutation id. Any change with an id at or below it was handled before, so
    it's skipped. This makes it safe for a phone to resend a push whose response
@@ -133,8 +132,8 @@ including deleted rows, plus:
 - `last_mutation_id`: so the phone can drop the changes the server has handled,
 - `rejections`: this phone's rejections recorded since `N`.
 
-The pull reads one consistent snapshot of the database (`REPEATABLE READ`), so
-the rows and the new cursor always match.
+The pull reads one consistent snapshot of the database
+(`Courtside.Database.read_transaction/1`), so the rows and the new cursor always match.
 
 The phone applies a pull in one IndexedDB transaction: it writes the rows into
 the base, removes the deleted ones, saves the cursor, drops confirmed changes
@@ -180,8 +179,11 @@ let a row slip past a cursor. Suppose push A got version 7 and push B got
 version 8, but B committed first. A phone pulling between the two commits would
 get B's rows and move its cursor to 8. It would never see A's version-7 rows.
 
-Taking the organization's `org_versions` row lock first prevents this. Push B can't get a
-version until push A has committed. `server/test/courtside/sync_concurrency_test.exs`
+Running each push as a writing transaction (`Courtside.Database.write_transaction/1`)
+prevents this. On SQLite, which the server uses, a push starts with `BEGIN IMMEDIATE`
+and holds the database's only write lock until it commits, so push B can't get a
+version until push A has committed. (On Postgres, the update to the organization's
+`org_versions` row would hold that row's lock instead.) `server/test/courtside/sync_concurrency_test.exs`
 runs 20 concurrent pushes against a phone pulling in a loop and checks that no
 row is skipped. When the version is deliberately assigned outside the lock, the
 test fails.

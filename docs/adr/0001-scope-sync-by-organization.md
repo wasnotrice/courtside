@@ -20,7 +20,8 @@ they can be added later without changing the data or the protocol.
 ## Consequences
 
 - Each push takes its organization's counter lock, so pushes from different schools
-  never wait on each other. Pushes within one organization stay serialized, which keeps
+  never wait on each other. (On SQLite they do, since it allows one writer at a time:
+  see [ADR 0002](0002-sqlite-and-litestream-on-one-fly-machine.md).) Pushes within one organization stay serialized, which keeps
   the guarantee that version order matches commit order (see `docs/sync-protocol.md`).
 - Limiting a coach to their own program later is a filter on pull. It doesn't change
   the cursor, because versions within an organization still increase in commit order.

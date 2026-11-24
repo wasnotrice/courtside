@@ -13,7 +13,8 @@ Three phases, with two spikes between the first and second:
 
 (The headings below call these phase 1, the spikes, phase 2, phase 3 and phase 4.)
 
-**Status:** phase 1, the spikes and phase 2 are done. Next is phase 3. Where what was
+**Status:** phase 1, the spikes and phase 2 are done. Next is getting the team on it
+(see "Hosting" below), which moves the device-token part of phase 4 ahead of phase 3. Where what was
 built differs from the plan, the sections below say so.
 
 The terms used here are defined in [`GLOSSARY.md`](../GLOSSARY.md). The decision to
@@ -565,6 +566,45 @@ connection" when not.
 10. Undo (reverses captured in `AppState.mutate`) on the live and entry screens, and a
     history sheet with revert on the review and roster screens.
 11. Docs, then the end-to-end run.
+
+---
+
+## Hosting: getting the team on it
+
+Decided 2026-11-24, with the season under way: real use comes before the Tauri app.
+The database decision is [ADR 0002](adr/0002-sqlite-and-litestream-on-one-fly-machine.md).
+
+**Order:**
+1. The server on SQLite, behind `Courtside.Database`. Done.
+2. Deploy config: one release that serves the API, the socket and the web build.
+3. Device tokens (from phase 4, without accounts), so the server can be public.
+4. Deploy, and pilot with the coach and one scorer at real practices and a game.
+5. The rest of phase 4 (accounts and roles), then phase 3 only if the pilot needs it:
+   iOS clearing storage, the screen sleeping, or wanting an App Store app.
+
+**Where it runs:**
+- **Fly.io, region `ord` (Chicago),** in Eric's own Fly organization (to confirm).
+- **One machine, always on** (shared CPU, 512 MB). Phones retry, so a minute down for a
+  deploy goes unnoticed, but a machine that stops when idle would delay the first sync
+  after every wake-up.
+- **A volume at `/data`** holding `courtside.db` (`DATABASE_PATH=/data/courtside.db`).
+- **Litestream** runs beside Phoenix in the same machine and streams the database to a
+  Tigris bucket. On boot, if the volume has no database, it restores from the bucket
+  first. After any restore, run `Courtside.Organizations.new_data_id!/1`.
+- **One address for everything.** Phoenix serves the static web build from
+  `priv/static`, so there's no CORS and the socket's origin is the page's own. The Tauri
+  app adds `tauri://localhost` to the allowed origins later.
+- **A permanent domain, chosen before the pilot** (to decide). Phones keep their data,
+  unsynced changes included, per address, so changing it later strands whatever a
+  phone hadn't synced.
+
+**Private until sign-in:** a device token, created by a mix task and entered once on
+each phone, checked by a plug on `/api` and when the socket connects. Phase 4's
+"Device tokens" section describes the table; accounts come later on top of it.
+
+**Who does what:** Eric owns the Fly organization, DNS, secrets and deploys. The
+sandbox writes the Dockerfile, `fly.toml`, Litestream config, release settings, device
+tokens and a deploy guide.
 
 ---
 

@@ -21,7 +21,8 @@ offline-first design with hand-rolled sync**. Don't swap in PowerSync, ElectricS
 Replicache or a CRDT library: building the sync is the point. Keep the sync code behind
 a clear boundary so one of those could be swapped in later for comparison.
 
-Stack: **SvelteKit** client (`web/`), **Phoenix/Elixir** API (`server/`), **Postgres**.
+Stack: **SvelteKit** client (`web/`), **Phoenix/Elixir** API (`server/`), **SQLite**
+(with Litestream in production; see [ADR 0002](docs/adr/0002-sqlite-and-litestream-on-one-fly-machine.md)).
 
 ## Decisions already made (don't reopen these)
 
@@ -44,7 +45,7 @@ Stack: **SvelteKit** client (`web/`), **Phoenix/Elixir** API (`server/`), **Post
   write goes to the device first, and a queue of pending mutations syncs when there's
   signal.
 - **Server-authoritative validation in Elixir code**, which the coach prefers over
-  pushing logic into the database. Postgres keeps simple constraints as a backstop:
+  pushing logic into the database. The database keeps simple constraints as a backstop:
   foreign keys, checks, and a unique key on (run, player).
 - **Conflict policy:** the most recent write wins, per field. Values like "38 vs 41
   makes" can't be merged, so a CRDT isn't appropriate.
@@ -54,7 +55,7 @@ Stack: **SvelteKit** client (`web/`), **Phoenix/Elixir** API (`server/`), **Post
 
 [`docs/sync-protocol.md`](docs/sync-protocol.md) is the full and current write-up:
 Replicache-style push and pull, one version counter per organization taken under a
-row lock, tombstones, rejections through pull, every change (mutation) and its
+writing transaction, tombstones, rejections through pull, every change (mutation) and its
 arguments, restoring deleted games and runs, and the change log behind history. The
 rules for each change are in `server/lib/courtside/sync/mutators.ex` and
 `web/src/lib/sync/mutators.ts`, kept in step by the shared cases in `spec/mutations/`.
@@ -85,8 +86,9 @@ simulated phones, UI helpers), `npm run check` (types), `npm run test:e2e`.
 
 ## Next steps
 
-Phase 3 (the Tauri mobile app) and phase 4 (sign-in) in `docs/games-plan.md`. Sign-in
-must ship before any server is reachable from outside the tailnet.
+Getting the team on it: the "Hosting" section of `docs/games-plan.md`. The server now
+runs on SQLite; next are the deploy config and device tokens, then a pilot. Then phase
+4 (accounts) and, if needed, phase 3 (Tauri). Nothing goes public without device tokens.
 
 Known follow-ups, not urgent:
 - Several tabs open on one device: share state through a `BroadcastChannel` or a lock.
@@ -104,8 +106,8 @@ Known follow-ups, not urgent:
 
 ## How to run
 
-See `README.md`. In this sandbox, Postgres is the shared one on port **5432**, so use
-`PGPORT=5432`, and Elixir needs `MISE_ELIXIR_VERSION=1.20.2-otp-29 MISE_ERLANG_VERSION=29.0.2`
+See `README.md`. The database is a SQLite file in `server/`, so nothing needs starting.
+In this sandbox, Elixir needs `MISE_ELIXIR_VERSION=1.20.2-otp-29 MISE_ERLANG_VERSION=29.0.2`
 (no mise version is set globally).
 
 ## Working agreements with this user
