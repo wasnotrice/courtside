@@ -77,6 +77,11 @@ storage, so the queue isn't evicted when the phone is low on space. The home
 screen app may keep its own storage, separate from Safari's, so don't switch
 between them. The Sync tab shows whether storage is persistent.
 
+## Deploy it
+
+[docs/deploy.md](docs/deploy.md): Fly.io, one machine, SQLite on a volume and
+Litestream backups. Not before device tokens.
+
 ## Test it
 
 ```sh

@@ -1,0 +1,16 @@
+#!/bin/sh
+# The container's command. Litestream runs the server as its child: it restores the
+# database from the backup if the volume has none, then streams every change to the
+# bucket while bin/boot migrates and starts Phoenix. See docs/deploy.md.
+set -eu
+
+# Tell bin/boot whether the volume was empty, so it can give a restored database a
+# new data id (Courtside.Release.after_restore/0).
+if [ ! -f "$DATABASE_PATH" ]; then
+  export COURTSIDE_EMPTY_VOLUME=1
+fi
+
+exec litestream replicate \
+  -config /app/litestream.yml \
+  -restore-if-db-not-exists \
+  -exec /app/bin/boot

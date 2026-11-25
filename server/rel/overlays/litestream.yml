@@ -1,0 +1,11 @@
+# Litestream streams the SQLite database to a Tigris bucket (`fly storage create`
+# sets BUCKET_NAME and the AWS_* credentials as secrets). See docs/deploy.md.
+dbs:
+  - path: ${DATABASE_PATH}
+    replica:
+      url: s3://${BUCKET_NAME}/courtside.db?endpoint=fly.storage.tigris.dev&region=auto
+
+# A full snapshot a day, kept for a week: a restore can go back that far.
+snapshot:
+  interval: 24h
+  retention: 168h

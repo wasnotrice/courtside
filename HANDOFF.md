@@ -87,7 +87,8 @@ simulated phones, UI helpers), `npm run check` (types), `npm run test:e2e`.
 ## Next steps
 
 Getting the team on it: the "Hosting" section of `docs/games-plan.md`. The server now
-runs on SQLite; next are the deploy config and device tokens, then a pilot. Then phase
+runs on SQLite and the deploy config is written (`docs/deploy.md`); next are device
+tokens, then a pilot. Then phase
 4 (accounts) and, if needed, phase 3 (Tauri). Nothing goes public without device tokens.
 
 Known follow-ups, not urgent:

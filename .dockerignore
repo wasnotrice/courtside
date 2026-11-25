@@ -1,0 +1,15 @@
+# Only web/ and server/ sources go into the image.
+.git
+docs
+spec
+**/node_modules
+web/build
+web/.svelte-kit
+web/src-tauri
+web/test-results
+web/playwright-report
+server/_build
+server/deps
+server/*.db
+server/*.db-*
+server/priv/static

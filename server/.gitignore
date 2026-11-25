@@ -29,3 +29,6 @@ courtside-*.tar
 # SQLite databases, with their WAL and shared-memory files.
 /*.db
 /*.db-*
+
+# The web build, copied in for releases (see the Dockerfile).
+/priv/static/

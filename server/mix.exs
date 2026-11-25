@@ -10,6 +10,7 @@ defmodule Courtside.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      releases: [courtside: [include_executables_for: [:unix]]],
       listeners: [Phoenix.CodeReloader]
     ]
   end

@@ -7,7 +7,8 @@ config :courtside, CourtsideWeb.Endpoint,
   force_ssl: [
     rewrite_on: [:x_forwarded_proto],
     exclude: [
-      # paths: ["/health"],
+      # Fly's health checks reach the machine directly, over plain HTTP.
+      paths: ["/api/health"],
       hosts: ["localhost", "127.0.0.1"]
     ]
   ]

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Migrates the database and starts the server. Runs under Litestream (bin/entrypoint).
+set -eu
+cd -P -- "$(dirname -- "$0")"
+
+./courtside eval Courtside.Release.migrate
+
+if [ "${COURTSIDE_EMPTY_VOLUME:-}" = 1 ]; then
+  ./courtside eval Courtside.Release.after_restore
+fi
+
+PHX_SERVER=true exec ./courtside start

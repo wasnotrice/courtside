@@ -17,7 +17,9 @@ defmodule CourtsideWeb do
   those modules here.
   """
 
-  def static_paths, do: ~w(assets fonts images favicon.ico robots.txt)
+  # The web build's top level (web/build, copied into priv/static for releases).
+  # Everything else is a route of the web app, served index.html by AppController.
+  def static_paths, do: ~w(_app index.html service-worker.js favicon.svg robots.txt)
 
   def router do
     quote do

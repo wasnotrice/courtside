@@ -1,0 +1,41 @@
+# Courtside on Fly.io: one machine, always on, with the SQLite database on a volume
+# and Litestream streaming it to a Tigris bucket. Setup and deploys: docs/deploy.md.
+
+app = "courtside"
+primary_region = "ord"
+# Gives Litestream time to push the last changes after Phoenix stops.
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PHX_HOST = "courtside.fly.dev"
+  PORT = "8080"
+  DATABASE_PATH = "/data/courtside.db"
+
+# SQLite allows one machine. Deploy with --ha=false so Fly doesn't add a second.
+[mounts]
+  source = "courtside_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Phones retry, but a stopped machine would delay the first sync after every
+  # wake-up, and the socket's pokes need it running.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    path = "/api/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

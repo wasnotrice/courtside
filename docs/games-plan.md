@@ -576,7 +576,8 @@ The database decision is [ADR 0002](adr/0002-sqlite-and-litestream-on-one-fly-ma
 
 **Order:**
 1. The server on SQLite, behind `Courtside.Database`. Done.
-2. Deploy config: one release that serves the API, the socket and the web build.
+2. Deploy config: one release that serves the API, the socket and the web build. Done:
+   [`deploy.md`](deploy.md).
 3. Device tokens, stage 1 below, so the server can be public.
 4. Deploy, and pilot with the coach and one scorer at real practices and a game.
 5. Sign-in, stage 2 below (the rest of phase 4), before anyone beyond the coach and
