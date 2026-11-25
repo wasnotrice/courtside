@@ -577,10 +577,15 @@ The database decision is [ADR 0002](adr/0002-sqlite-and-litestream-on-one-fly-ma
 **Order:**
 1. The server on SQLite, behind `Courtside.Database`. Done.
 2. Deploy config: one release that serves the API, the socket and the web build.
-3. Device tokens (from phase 4, without accounts), so the server can be public.
+3. Device tokens, stage 1 below, so the server can be public.
 4. Deploy, and pilot with the coach and one scorer at real practices and a game.
-5. The rest of phase 4 (accounts and roles), then phase 3 only if the pilot needs it:
-   iOS clearing storage, the screen sleeping, or wanting an App Store app.
+5. Sign-in, stage 2 below (the rest of phase 4), before anyone beyond the coach and
+   the scorer uses it. Then phase 3 only if the pilot needs it: iOS clearing storage,
+   the screen sleeping, or wanting an App Store app.
+
+The phones don't use the tailnet. The server is public, and device tokens keep it
+private. That relaxes phase 4's rule of no public server before sign-in: tokens without
+accounts are enough for a pilot with two trusted people, and not beyond.
 
 **Where it runs:**
 - **Fly.io, region `ord` (Chicago),** in Eric's own Fly organization (to confirm).
@@ -594,13 +599,66 @@ The database decision is [ADR 0002](adr/0002-sqlite-and-litestream-on-one-fly-ma
 - **One address for everything.** Phoenix serves the static web build from
   `priv/static`, so there's no CORS and the socket's origin is the page's own. The Tauri
   app adds `tauri://localhost` to the allowed origins later.
-- **A permanent domain, chosen before the pilot** (to decide). Phones keep their data,
-  unsynced changes included, per address, so changing it later strands whatever a
-  phone hadn't synced.
+- **A stable address: `<app>.fly.dev`,** which lasts as long as the app keeps its name.
+  A custom domain can come later. Phones keep their data per address, so a move means
+  every phone syncs first, then switches; synced data is pulled again, and only
+  unsynced changes would be stranded.
 
-**Private until sign-in:** a device token, created by a mix task and entered once on
-each phone, checked by a plug on `/api` and when the socket connects. Phase 4's
-"Device tokens" section describes the table; accounts come later on top of it.
+### Device tokens, then sign-in
+
+One design in two stages. In both, a phone proves who it is with a long-lived device
+token (phase 4, "Device tokens"); what changes is how a phone gets one.
+
+**Stage 1, for the pilot: tokens handed out by the coach.**
+- **Issuing:** a release command, `courtside device create "Scorer's iPhone"`, makes a
+  random token and prints it once as a link, `https://<app>.fly.dev/#token=…`. The
+  server stores only its hash, with the device's name, organization and last-used time.
+  The token is in the fragment, which browsers never send, so it stays out of logs.
+- **On the phone:** opening the link once stores the token on the device and clears
+  it from the address bar. Every push, pull and history request sends
+  `Authorization: Bearer …`; so does the socket.
+- **On the server:** a plug on `/api` looks up the hash and puts the device and its
+  organization in the context, so the organization comes from the token, not from the
+  app's build settings. The socket checks the token on connect and the organization on
+  join. A client id belongs to the token that first used it. A missing or revoked token
+  is a 401.
+- **A 401** shows "this phone isn't set up". Changes wait in the queue and sync once a
+  valid token is entered.
+- **Revoking:** `courtside device revoke` deletes the row, which takes effect at once.
+  A token unused for 365 days expires; it never expires mid-season.
+
+**Stage 2, phase 4: tokens issued by signing in.** Accounts (`phx.gen.auth`, sign-in by
+emailed link) and a role per program are added, and token rows gain a `user_id`. A
+person signs in on a phone and the server issues the token, instead of the coach
+running a command. Then pull filters by the user's programs, each mutator checks the
+user's role, rows record their author, and the coach manages devices in the app.
+Everything from stage 1 stays: the table, the plug and socket checks, how the phone
+stores and sends the token, the 401 screen, and client ids bound to tokens. Pilot
+tokens are assigned to their users, or revoked so those phones sign in once.
+
+**Why in this order:**
+- **Stage 1 isn't thrown away.** Phase 4 already chose device tokens over browser
+  sessions, so a phone offline for days is never signed out mid-game. Stage 1 builds
+  that part; sign-in is added on top.
+- **It takes on the hard part first.** What's specific to Courtside is how
+  authentication meets offline sync: every request, the socket, a 401 with changes
+  queued, client id ownership. Accounts are standard Phoenix code. The pilot tests the
+  hard part.
+- **It's much smaller,** about a day. Sign-in also needs an email provider and its DNS
+  records, roles, sign-in screens and device management, none of which helps two people
+  who both have full access.
+- **It's enough for the pilot:** strangers are kept out, a lost phone can be cut off,
+  and the change log records which device made each change.
+
+**Limits of stage 1:**
+- Any valid token has full access to the organization, students' names included.
+  Fine for the coach and a trusted scorer, not for players or parents.
+- Each new phone means a command on Fly, run by Eric.
+- A token sent by text message is as safe as that thread. Send it privately and revoke
+  it if it goes astray.
+
+**The rule:** stage 1 is enough for the pilot. Stage 2 ships before anyone beyond the
+coach and the scorer uses Courtside.
 
 **Who does what:** Eric owns the Fly organization, DNS, secrets and deploys. The
 sandbox writes the Dockerfile, `fly.toml`, Litestream config, release settings, device
